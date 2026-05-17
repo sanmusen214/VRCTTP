@@ -1,0 +1,31 @@
+*.env
+/refer_resources/
+
+
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*.pyo
+# 日志文件
+*.log
+# 虚拟环境
+venv/
+env/
+# 构建输出
+build/
+dist/
+*.egg-info/
+# IDE 配置文件
+vscode/
+idea/
+# 操作系统生成的文件
+DS_Store
+Thumbs.db
+# 单元测试覆盖率文件
+coverage
+*.cover
+*.coverage.*
+# 临时文件
+*.tmp
+*.swp
+*.bak

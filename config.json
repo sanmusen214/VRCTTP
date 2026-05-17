@@ -1,0 +1,152 @@
+{
+  "_comment": "VRChat 实时翻译流 配置文件。敏感 API Key 建议写入系统环境变量，在 params 中用 dollar+{变量名} 格式引用。",
+
+  "_comment_modules": [
+    "全局模块注册表：所有模块（音频源、翻译、消费者）统一在此以 ref_id 为键定义。",
+    "Pipeline 的 graph 仅描述拓扑连接，不内联任何参数。",
+    "同一 ref_id 可被多条 pipeline 引用，引擎为每条 pipeline 独立实例化。"
+  ],
+  "modules": {
+
+    "_comment_audio": "── 音频源模块 ──────────────────────────────────────────",
+    "loopback_vrchat": {
+      "type": "loopback",
+      "params": {
+        "process_name": "VRChat.exe",
+        "sample_rate": 16000,
+        "vad_mode": 3,
+        "mode": "streaming",
+        "chunk_ms": 200
+      }
+    },
+    "microphone_system": {
+      "type": "microphone",
+      "params": {
+        "sample_rate": 16000,
+        "vad_mode": 3,
+        "mode": "streaming",
+        "chunk_ms": 200
+      }
+    },
+
+    "_comment_stt": "── 语音识别模块 ─────────────────────────────────────────",
+    "volc_stt": {
+      "type": "volc_streaming_stt",
+      "params": {
+        "_comment": "新版控制台用 api_key（UUID），旧版控制台改用 app_id + access_key",
+        "api_key": "${VOLC_API_KEY}",
+        "resource_id": "volc.seedasr.sauc.duration",
+        "language": "",
+        "streaming_mode": true
+      }
+    },
+
+    "_comment_mt": "── 机器翻译模块 ─────────────────────────────────────────",
+    "mt_zh": {
+      "type": "volc_machine_translation",
+      "params": {
+        "_comment": "新版控制台用 api_key（UUID）；旧版改用 app_id + access_key",
+        "api_key": "${VOLC_API_KEY}",
+        "source_language": "",
+        "target_language": "en"
+      }
+    },
+    "mt_ja": {
+      "type": "volc_machine_translation",
+      "params": {
+        "api_key": "${VOLC_API_KEY}",
+        "source_language": "",
+        "target_language": "ja"
+      }
+    },
+
+    "_comment_consumer": "── 消费者模块 ───────────────────────────────────────────",
+    "terminal_out": {
+      "type": "terminal",
+      "params": {
+        "color": true
+      }
+    },
+    "osc_out": {
+      "type": "osc_vrchat",
+      "params": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "trigger_sfx": false
+      }
+    },
+    "terminal_bilingual": {
+      "type": "terminal",
+      "params": {
+        "color": true,
+        "_comment_grouping": "group_by 指向两条翻译分支的公共祖先节点时间戳。收到新包立即渲染，同一时间戳的包合并显示，新时间戳丢弃旧内容。",
+        "group_by": "timestamp_volc_stt"
+      }
+    },
+    "osc_bilingual": {
+      "type": "osc_vrchat",
+      "params": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "trigger_sfx": false,
+        "group_by": "timestamp_volc_stt",
+        "group_numbers": 2
+      }
+    },
+
+    "_comment_filter": "── 过滤器模块 ─────────────────────────────────────────",
+    "final_only": {
+      "type": "filter",
+      "params": {
+        "_comment": "只放行最终识别结果（is_partial=false），中间流式包被丢弃，不进入翻译环节",
+        "field": "is_partial",
+        "pass_when": false
+      }
+    }
+  },
+
+  "pipelines": [
+    {
+      "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
+      "id": "vrchat_volc_streaming",
+      "name": "VRChat英语→中文（火山引擎流式）",
+      "enabled": false,
+      "graph": {
+        "_comment": "entry 必须是 PacketProducerModule 类型的 ref_id；routes 用邻接表描述所有模块连接。",
+        "_comment_filter": "final_only 过滤器拦截中间流式贵包（is_partial=true），只允许最终结果进入翻译环节。",
+        "entry": "loopback_vrchat",
+        "routes": {
+          "loopback_vrchat": ["volc_stt"],
+          "volc_stt":        ["terminal_out", "final_only"],
+          "final_only":      ["mt_zh"],
+          "mt_zh":           ["osc_out"]
+        }
+      }
+    },
+
+    {
+      "_comment": "【示例：双语输出管道】STT 识别后并行翻译成中文和日文，两路结果合并显示在同一行。",
+      "_comment_enable": "将 enabled 改为 true 启用（需配置 VOLC_API_KEY）。",
+      "id": "vrchat_bilingual",
+      "name": "VRChat英语→中日双语",
+      "enabled": true,
+      "graph": {
+        "entry": "loopback_vrchat",
+        "routes": {
+          "loopback_vrchat": ["volc_stt"],
+          "volc_stt":        ["mt_ja", "mt_zh"],
+          "final_only":      [],
+          "mt_zh":           ["terminal_bilingual","osc_bilingual"],
+          "mt_ja":           ["terminal_bilingual","osc_bilingual"]
+        }
+      }
+    }
+  ],
+
+  "gui": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8082
+  }
+}
+

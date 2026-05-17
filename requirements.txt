@@ -1,0 +1,35 @@
+# VRChat 实时翻译流 — 依赖列表
+# Windows 平台
+
+# 音频采集
+soundcard>=0.4.3
+
+# 语音活动检测（VAD）— Windows 用 wheels 版本，无需编译
+webrtcvad-wheels>=2.0.10
+
+# OpenAI API（STT + 翻译 + Realtime）
+openai>=1.30.0
+
+# OSC 通信（VRChat chatbox）
+python-osc>=1.8.0
+
+# Web GUI
+nicegui>=1.4.0
+
+# 数值计算（音频处理）
+numpy>=1.26.0
+
+# 音频重采样（可选，提升质量；无则退路用 numpy 插值）
+scipy>=1.13.0
+
+# 终端彩色输出
+colorama>=0.4.6
+
+# WebSocket 客户端（OpenAI Realtime API + 火山引擎流式 STT）
+websockets>=12.0
+
+# .env 文件支持（从项目根目录读取环境变量，如 VOLC_API_KEY）
+python-dotenv>=1.0.0
+
+# HTTP 客户端（火山引擎机器翻译 API）
+requests>=2.31.0
