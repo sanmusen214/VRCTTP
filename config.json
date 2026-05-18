@@ -131,9 +131,9 @@
       "name": "VRChat英语→中日双语",
       "enabled": true,
       "graph": {
-        "entry": "loopback_vrchat",
+        "entry": "microphone_system",
         "routes": {
-          "loopback_vrchat": ["volc_stt"],
+          "microphone_system": ["volc_stt"],
           "volc_stt":        ["mt_ja", "mt_zh"],
           "final_only":      [],
           "mt_zh":           ["terminal_bilingual","osc_bilingual"],

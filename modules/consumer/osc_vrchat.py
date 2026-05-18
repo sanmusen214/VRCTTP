@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import time
+import threading
 
 from pythonosc.udp_client import SimpleUDPClient
 
@@ -40,6 +41,8 @@ VRCHAT_CHATBOX_MAX_CHARS = 144
 CHATBOX_ADDRESS = "/chatbox/input"
 
 
+    
+
 class VRChatOSCConsumer(PacketConsumerModule):
     """将翻译结果发送到 VRChat 聊天框（OSC 协议）。"""
 
@@ -54,6 +57,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         self.last_10_any_packages: list[MessagePacket] = []  # 记录之前的十个包（不论是否含翻译结果）
         self.last_10_translated_packages: list[MessagePacket] = []  # 记录之前的十个包(含翻译结果)
         self._last_update_text_content = None # 记录上次更新窗口内容的文本，避免重复发送相同内容
+        self.waiting_important_sent = False # 是否正在等待重要包的发送（重要包发送后会有0.4秒的冷却时间，避免短时间内重复发送）
 
     def _get_client(self) -> SimpleUDPClient:
         if self._client is None:
@@ -81,6 +85,18 @@ class VRChatOSCConsumer(PacketConsumerModule):
         if translated:
             text = (text + f"\n{translated}") if text else "{translated}"
         return text
+    
+    
+    def osc_send_text(self, text, close_waiting_important_status = False):
+        """
+        osc消息发送函数，单独抽离出来以便在需要时调用（如重要包发送时）。
+        """
+        client = self._get_client()
+        # VRChat OSC /chatbox/input: (text, send_immediately, trigger_sfx)
+        client.send_message(CHATBOX_ADDRESS, [text, True, self._trigger_sfx])
+        if close_waiting_important_status:
+            self.waiting_important_sent = False
+        logger.debug("[%s] OSC 发送: %r", self.module_id, text[:60])
 
     def process_packet(self, packet: MessagePacket) -> list[MessagePacket]:
         """处理包，发送 OSC 消息。"""
@@ -128,7 +144,8 @@ class VRChatOSCConsumer(PacketConsumerModule):
                 self.module_id, count, self._group_numbers
             )
             return [packet]
-        # 5. 当前包重要性（是否要延迟0.2秒发送）
+        # 5. 当前包重要性（是否要延迟发送）
+        # TODO: 区分当前包的translate结果是不是上一句话完整的翻译结果，而不是这一句的；如果是这样，不能算important包
         now_packet_is_important = False
         if not packet.is_partial and translated:
             # 如果当前包不是流式中间包，且translated不为空，说明当前包集齐了完整的翻译结果
@@ -148,16 +165,17 @@ class VRChatOSCConsumer(PacketConsumerModule):
             if text == self._last_update_text_content:
                 logger.debug("[%s] OSC 消息与上次相同，跳过发送: %r", self.module_id, text[:60])
                 return [packet]
+            if self.waiting_important_sent and not now_packet_is_important:
+                # 如果当前处于等待重要包发送状态，且当前包不重要，跳过
+                return [packet]
+            # 如果包是重要包，延迟0.6秒发送，并设置waiting_important_sent
             if now_packet_is_important:
-                # 重要包发送前短暂等待，避免过近的osc消息导致VRChat混乱
-                print(f"重要包，发送前等待0.3秒以聚合可能的后续翻译结果...")
-                time.sleep(0.3)
-            self._last_update_text_content = text  # 更新记录的文本内容
-            # 发送 OSC 消息
-            client = self._get_client()
-            # VRChat OSC /chatbox/input: (text, send_immediately, trigger_sfx)
-            client.send_message(CHATBOX_ADDRESS, [text, True, self._trigger_sfx])
-            logger.debug("[%s] OSC 发送: %r", self.module_id, text[:60])
+                self.waiting_important_sent = True
+                # 在子线程后取消waiting_important_sent状态，避免阻塞主线程
+                threading.Timer(0.6, self.osc_send_text, args=[text, True]).start()
+            else:
+                # 发送 OSC 消息
+                self.osc_send_text(text)
         except Exception:
             logger.exception("[%s] OSC 发送失败", self.module_id)
             self._client = None  # 下次重新创建客户端
