@@ -34,6 +34,7 @@
 | `"loopback"` | `LoopbackSource` | 系统音频环回源 |
 | `"volc_streaming_stt"` | `VolcStreamingSTT` | 火山引擎流式 STT |
 | `"volc_machine_translation"` | `VolcMachineTranslation` | 火山引擎机器翻译 |
+| `"baidu_machine_translation"` | `BaiduMachineTranslation` | 百度通用翻译 |
 | `"terminal"` | `TerminalConsumer` | 终端输出 |
 | `"osc_vrchat"` | `VRChatOSCConsumer` | VRChat OSC 输出 |
 | `"filter"` | `PacketFilter` | 通用包过滤器 |

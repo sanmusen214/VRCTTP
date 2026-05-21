@@ -239,7 +239,7 @@ class PacketConsumerModule(BaseModule):
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)
-        self._group_by: str = config.get("group_by", "")
+        
     
 
     # ------------------------------------------------------------------

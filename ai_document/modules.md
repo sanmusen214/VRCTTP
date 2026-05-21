@@ -123,7 +123,8 @@ PacketProducerModule
 PacketConsumerModule
 └── BasePacketConsumerModule（base.py）  公共配置字段
     ├── VolcStreamingSTT                  火山引擎流式 STT
-    └── VolcMachineTranslation            火山引擎机器翻译
+    ├── VolcMachineTranslation            火山引擎机器翻译
+    └── BaiduMachineTranslation           百度通用翻译
 ```
 
 ---
@@ -208,6 +209,61 @@ PacketConsumerModule
 | `access_key` | `""` | 旧版 Access Key（备用） |
 | `source_language` | `""` | 源语言（空=自动检测） |
 | `target_language` | `"zh"` | 目标语言 |
+
+---
+
+### BaiduMachineTranslation（baidu_machine_translation.py）
+
+注册类型：`"baidu_machine_translation"`
+
+调用百度翻译开放平台 HTTP API，将 `text_original` 翻译后写入 `text_translated`。
+
+**行为：**
+- `text_original` 为空时直接透传包（不翻译）
+- `is_partial=True` 的包直接透传，不发起 API 请求（减少无效调用）
+- 网络错误时记录日志并透传原始包，不抛异常
+- 复用 `requests.Session`（HTTP keep-alive）
+- 签名算法：`MD5(app_id + query + salt + app_key)`，salt 每次随机生成
+
+**生命周期钩子：**
+- `on_after_stop()`：关闭 `requests.Session`
+
+> **注意**：推荐在上游插入 `PacketFilter(final_only)` 节点，确保只有完整识别结果进入翻译。
+
+**Config 参数：**
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `app_id` | `""` | 百度翻译开放平台 APP ID |
+| `app_key` | `""` | 百度翻译开放平台 APP Key（签名用） |
+| `source_language` | `"auto"` | 源语言（`"auto"` = 自动检测） |
+| `target_language` | `"zh"` | 目标语言 |
+
+**常用语言代码：**
+
+| 语言 | 代码 |
+|------|------|
+| 自动检测 | `auto` |
+| 中文简体 | `zh` |
+| 英语 | `en` |
+| 日语 | `jp` |
+| 韩语 | `kor` |
+| 法语 | `fra` |
+| 德语 | `de` |
+
+**Config 示例：**
+
+```json
+"mt_zh_baidu": {
+  "type": "baidu_machine_translation",
+  "params": {
+    "app_id": "${BAIDU_APP_ID}",
+    "app_key": "${BAIDU_APP_KEY}",
+    "source_language": "auto",
+    "target_language": "zh"
+  }
+}
+```
 
 ---
 

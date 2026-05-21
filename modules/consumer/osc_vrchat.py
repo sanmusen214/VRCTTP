@@ -53,7 +53,8 @@ class VRChatOSCConsumer(PacketConsumerModule):
         self._trigger_sfx: bool = config.get("trigger_sfx", False)
         self._max_chars: int = int(config.get("max_chars", VRCHAT_CHATBOX_MAX_CHARS))
         self._client: SimpleUDPClient | None = None
-        self._group_numbers: int = int(config.get("group_numbers", 2))
+        self._group_by: str = config.get("group_by", "")
+        self._group_numbers: int = int(config.get("group_numbers", 1))
         self.last_10_any_packages: list[MessagePacket] = []  # 记录之前的十个包（不论是否含翻译结果）
         self.last_10_translated_packages: list[MessagePacket] = []  # 记录之前的十个包(含翻译结果)
         self._last_update_text_content = None # 记录上次更新窗口内容的文本，避免重复发送相同内容

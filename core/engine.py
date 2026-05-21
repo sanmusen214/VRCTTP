@@ -27,6 +27,7 @@ from modules.audio.microphone import MicrophoneSource
 from modules.consumer.osc_vrchat import VRChatOSCConsumer
 from modules.consumer.terminal import TerminalConsumer
 from modules.filter.packet_filter import PacketFilter
+from modules.translation.baidu_machine_translation import BaiduMachineTranslation
 from modules.translation.volc_machine_translation import VolcMachineTranslation
 from modules.translation.volc_streaming_stt import VolcStreamingSTT
 
@@ -45,6 +46,7 @@ PRODUCER_REGISTRY: dict[str, type[PacketProducerModule]] = {
 MODULE_REGISTRY: dict[str, type[PacketConsumerModule]] = {
     "volc_streaming_stt": VolcStreamingSTT,
     "volc_machine_translation": VolcMachineTranslation,
+    "baidu_machine_translation": BaiduMachineTranslation,
     "terminal": TerminalConsumer,
     "osc_vrchat": VRChatOSCConsumer,
     "filter": PacketFilter,

@@ -59,12 +59,22 @@
         "target_language": "ja"
       }
     },
+    "mt_zh_baidu": {
+      "type": "baidu_machine_translation",
+      "params": {
+        "app_id": "${BAIDU_APP_ID}",
+        "app_key": "${BAIDU_APP_KEY}",
+        "source_language": "auto",
+        "target_language": "en"
+      }
+    },
 
     "_comment_consumer": "── 消费者模块 ───────────────────────────────────────────",
     "terminal_out": {
       "type": "terminal",
       "params": {
-        "color": true
+        "color": true,
+        "_comment_grouping": "group_by 指向两条翻译分支的公共祖先节点时间戳。收到新包立即渲染，同一时间戳的包合并显示，新时间戳丢弃旧内容。"
       }
     },
     "osc_out": {
@@ -72,25 +82,9 @@
       "params": {
         "host": "127.0.0.1",
         "port": 9000,
-        "trigger_sfx": false
-      }
-    },
-    "terminal_bilingual": {
-      "type": "terminal",
-      "params": {
-        "color": true,
-        "_comment_grouping": "group_by 指向两条翻译分支的公共祖先节点时间戳。收到新包立即渲染，同一时间戳的包合并显示，新时间戳丢弃旧内容。",
-        "group_by": "timestamp_volc_stt"
-      }
-    },
-    "osc_bilingual": {
-      "type": "osc_vrchat",
-      "params": {
-        "host": "127.0.0.1",
-        "port": 9000,
         "trigger_sfx": false,
-        "group_by": "timestamp_volc_stt",
-        "group_numbers": 2
+        "group_by": "timestamp_microphone_system",
+        "group_numbers": 1
       }
     },
 
@@ -134,10 +128,9 @@
         "entry": "microphone_system",
         "routes": {
           "microphone_system": ["volc_stt"],
-          "volc_stt":        ["mt_ja", "mt_zh"],
+          "volc_stt":        ["mt_zh_baidu"],
           "final_only":      [],
-          "mt_zh":           ["terminal_bilingual","osc_bilingual"],
-          "mt_ja":           ["terminal_bilingual","osc_bilingual"]
+          "mt_zh_baidu":     ["terminal_out","osc_out"]
         }
       }
     }
