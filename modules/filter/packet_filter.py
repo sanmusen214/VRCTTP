@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 
-from core.module import PacketConsumerModule
+from core.module import PacketConsumerModule, ParamType
 from core.packet import MessagePacket
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,24 @@ class PacketFilter(PacketConsumerModule):
     根据包中指定字段的值决定是否放行（pass through）该包。
     通过 pre_process 钩子实现：返回 None 即可在 process_packet 调用前丢弃包。
     """
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "(由 field 参数决定)", "must_have": True, "description": "field 配置项指定的包字段"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return []
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "field",     "type": ParamType.String, "default": "is_partial", "required": True,  "description": "要检查的包字段名（如 \"is_partial\"）", "selectable": None},
+            {"name": "pass_when", "type": ParamType.Bool,   "default": False,        "required": False, "description": "字段值等于此值时放行包", "selectable": None},
+            {"name": "invert",    "type": ParamType.Bool,   "default": False,        "required": False, "description": "True 表示反转判断逻辑", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

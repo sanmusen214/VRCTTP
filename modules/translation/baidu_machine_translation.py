@@ -39,6 +39,7 @@ from core.packet import (
     MessagePacket,
 )
 from modules.translation.base import BasePacketConsumerModule
+from core.module import ParamType
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,28 @@ class BaiduMachineTranslation(BasePacketConsumerModule):
     在翻译链中通常作为 STT 模块的下游：
         VolcStreamingSTT → BaiduMachineTranslation → ConsumerModules
     """
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original", "must_have": True, "description": "上游 STT 识别出的原文"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_translated", "must_have": True, "description": "翻译后的文字"},
+            {"name": "target_lang",     "must_have": True, "description": "目标语言代码"},
+        ]
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "app_id",          "type": ParamType.String,       "default": "",     "required": True,  "description": "百度翻译开放平台 APP ID，支持 ${ENV_VAR} 引用环境变量", "selectable": None},
+            {"name": "app_key",         "type": ParamType.Password,     "default": "",     "required": True,  "description": "百度翻译开放平台 APP Key，支持 ${ENV_VAR}", "selectable": None},
+            {"name": "source_language", "type": ParamType.LanguageCode, "default": "auto", "required": False, "description": "源语言（auto=自动检测）", "selectable": None},
+            {"name": "target_language", "type": ParamType.LanguageCode, "default": "zh",   "required": True,  "description": "目标语言（如 en / ja / jp / zh）", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

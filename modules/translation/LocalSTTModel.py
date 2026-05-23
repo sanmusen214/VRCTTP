@@ -57,12 +57,41 @@ from core.packet import (
     MessagePacket,
 )
 from modules.translation.base import BasePacketConsumerModule
+from core.module import ParamType
 
 logger = logging.getLogger(__name__)
 
 
 class LocalParaformerSTT(BasePacketConsumerModule):
     """本地 FunASR Paraformer 流式语音识别模块。"""
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "audio_data",       "must_have": True,  "description": "16-bit PCM mono 音频字节"},
+            {"name": "is_final_segment", "must_have": True,  "description": "True 表示语音段已结束"},
+            {"name": "is_partial",       "must_have": False, "description": "流式模式 True=中间块"},
+            {"name": "is_speech_start",  "must_have": False, "description": "True 触发缓冲区 & cache 重置"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original",    "must_have": True,  "description": "识别出的累积原文"},
+            {"name": "is_partial",       "must_have": True,  "description": "True=中间结果 / False=最终结果"},
+            {"name": "is_final_segment", "must_have": True,  "description": "True=语音段已结束"},
+        ]
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "model_path",               "type": ParamType.DirPath, "default": "",                      "required": True,  "description": "本地模型目录绝对路径", "selectable": None},
+            {"name": "model_name",               "type": ParamType.String,  "default": "paraformer-zh-streaming", "required": False, "description": "传给 AutoModel 的 model 字段", "selectable": None},
+            {"name": "streaming_mode",           "type": ParamType.Bool,    "default": False,                    "required": False, "description": "True=流式推理（配合流式音频源），False=批处理", "selectable": None},
+            {"name": "chunk_size",               "type": ParamType.List,    "default": [0, 10, 5],               "required": False, "description": "FunASR chunk_size 参数（[left, cur, right]）", "selectable": None},
+            {"name": "encoder_chunk_look_back",  "type": ParamType.Int,     "default": 4,                        "required": False, "description": "编码器回看块数", "selectable": None, "min": 0, "max": 32},
+            {"name": "decoder_chunk_look_back",  "type": ParamType.Int,     "default": 1,                        "required": False, "description": "解码器回看块数", "selectable": None, "min": 0, "max": 32},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

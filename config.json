@@ -1,13 +1,11 @@
 {
   "_comment": "VRChat 实时翻译流 配置文件。敏感 API Key 建议写入系统环境变量，在 params 中用 dollar+{变量名} 格式引用。",
-
   "_comment_modules": [
     "全局模块注册表：所有模块（音频源、翻译、消费者）统一在此以 ref_id 为键定义。",
     "Pipeline 的 graph 仅描述拓扑连接，不内联任何参数。",
     "同一 ref_id 可被多条 pipeline 引用，引擎为每条 pipeline 独立实例化。"
   ],
   "modules": {
-
     "_comment_audio": "── 音频源模块 ──────────────────────────────────────────",
     "loopback_vrchat": {
       "type": "loopback",
@@ -28,7 +26,6 @@
         "chunk_ms": 200
       }
     },
-
     "_comment_stt": "── 语音识别模块 ─────────────────────────────────────────",
     "local_stt": {
       "_comment": [
@@ -45,7 +42,11 @@
         "model_path": "C:\\Users\\11137\\myfolder\\source\\models\\DL_models\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
         "model_name": "paraformer-zh-streaming",
         "streaming_mode": true,
-        "chunk_size": [0, 10, 5],
+        "chunk_size": [
+          0,
+          10,
+          5
+        ],
         "encoder_chunk_look_back": 4,
         "decoder_chunk_look_back": 1
       }
@@ -60,9 +61,8 @@
         "streaming_mode": true
       }
     },
-
     "_comment_mt": "── 机器翻译模块 ─────────────────────────────────────────",
-    "mt_zh": {
+    "mt_en": {
       "type": "volc_machine_translation",
       "params": {
         "_comment": "新版控制台用 api_key（UUID）；旧版改用 app_id + access_key",
@@ -97,7 +97,6 @@
         "target_language": "jp"
       }
     },
-
     "_comment_consumer": "── 消费者模块 ───────────────────────────────────────────",
     "terminal_out": {
       "type": "terminal",
@@ -115,7 +114,6 @@
         "group_by": "timestamp_microphone_system"
       }
     },
-
     "_comment_filter": "── 过滤器模块 ─────────────────────────────────────────",
     "final_only": {
       "type": "filter",
@@ -124,9 +122,27 @@
         "field": "is_partial",
         "pass_when": false
       }
+    },
+    "temp_baidu_module": {
+      "type": "baidu_machine_translation",
+      "params": {
+        "app_id": "sgaesgaghaeh",
+        "app_key": "ehaegergdfgsdrhdrh",
+        "source_language": "auto",
+        "target_language": "zh"
+      }
+    },
+    "osc_output_vrc_audio_group": {
+      "type": "osc_vrchat",
+      "params": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "trigger_sfx": false,
+        "max_chars": 144,
+        "group_by": "timestamp_loopback_vrchat"
+      }
     }
   },
-
   "pipelines": [
     {
       "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
@@ -138,14 +154,22 @@
         "_comment_filter": "final_only 过滤器拦截中间流式贵包（is_partial=true），只允许最终结果进入翻译环节。",
         "entry": "loopback_vrchat",
         "routes": {
-          "loopback_vrchat": ["volc_stt"],
-          "volc_stt":        ["terminal_out", "final_only"],
-          "final_only":      ["mt_zh"],
-          "mt_zh":           ["osc_out"]
+          "loopback_vrchat": [
+            "volc_stt"
+          ],
+          "volc_stt": [
+            "terminal_out",
+            "final_only"
+          ],
+          "final_only": [
+            "mt_en"
+          ],
+          "mt_en": [
+            "osc_out"
+          ]
         }
       }
     },
-
     {
       "_comment": "【示例：双语输出管道】STT 识别后并行翻译成中文和日文，两路结果合并显示在同一行。",
       "_comment_enable": "将 enabled 改为 true 启用（需配置 VOLC_API_KEY）。",
@@ -155,16 +179,24 @@
       "graph": {
         "entry": "microphone_system",
         "routes": {
-          "loopback_vrchat": ["volc_stt"],
-          "volc_stt":        ["mt_jp_baidu"],
-          "final_only":      [],
-          "mt_en_baidu":     ["terminal_out","osc_out"],
-          "mt_jp_baidu":     ["terminal_out","osc_out"]
-
+          "microphone_system": [
+            "volc_stt"
+          ],
+          "volc_stt": [
+            "mt_jp_baidu",
+            "mt_en_baidu"
+          ],
+          "mt_en_baidu": [
+            "terminal_out",
+            "osc_out"
+          ],
+          "mt_jp_baidu": [
+            "terminal_out",
+            "osc_out"
+          ]
         }
       }
     },
-
     {
       "_comment": [
         "【示例：本地 STT + 机器翻译管道】使用本地 FunASR 模型识别中文语音，再翻译为英文输出到终端。",
@@ -176,25 +208,85 @@
       ],
       "id": "local_stt_demo",
       "name": "本地STT中文→英文（离线）",
-      "enabled": true,
+      "enabled": false,
       "graph": {
         "_comment": "音频源使用 streaming 模式，local_stt 以 streaming_mode=true 输出流式中间结果。",
         "_comment_filter": "final_only 过滤掉中间帧，只让最终识别结果进入翻译环节。",
         "entry": "microphone_system",
         "routes": {
-          "microphone_system": ["local_stt"],
-          "local_stt":         ["mt_en_baidu", "mt_jp_baidu"],
-          "mt_en_baidu":        ["terminal_out", "osc_out"],
-          "mt_jp_baidu":        ["terminal_out", "osc_out"]
+          "microphone_system": [
+            "local_stt"
+          ],
+          "local_stt": [
+            "mt_en_baidu",
+            "mt_jp_baidu"
+          ],
+          "mt_en_baidu": [
+            "terminal_out",
+            "osc_out"
+          ],
+          "mt_jp_baidu": [
+            "terminal_out",
+            "osc_out"
+          ]
+        }
+      }
+    },
+    {
+      "id": "test_pipeline",
+      "name": "测试管道",
+      "enabled": false,
+      "graph": {
+        "entry": "microphone_system",
+        "routes": {
+          "microphone_system": [
+            "local_stt"
+          ],
+          "local_stt": [
+            "osc_out"
+          ]
+        }
+      }
+    },
+    {
+      "id": "testPipiline2",
+      "name": "ceshi2",
+      "enabled": false,
+      "graph": {
+        "entry": "loopback_vrchat",
+        "routes": {
+          "loopback_vrchat": [
+            "local_stt"
+          ],
+          "local_stt": [
+            "osc_out"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ce2",
+      "name": "ce23",
+      "enabled": true,
+      "graph": {
+        "entry": "loopback_vrchat",
+        "routes": {
+          "loopback_vrchat": [
+            "local_stt"
+          ],
+          "local_stt": [
+            "mt_en_baidu"
+          ],
+          "mt_en_baidu": [
+            "osc_output_vrc_audio_group"
+          ]
         }
       }
     }
   ],
-
   "gui": {
     "enabled": true,
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 8082
   }
 }
-

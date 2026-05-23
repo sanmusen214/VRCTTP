@@ -34,7 +34,8 @@ import logging
 import queue
 import threading
 from abc import ABC, abstractmethod
-from typing import final
+from enum import Enum
+from typing import Any, final
 
 from core.packet import (
     KEY_TARGET_LANG,
@@ -44,6 +45,20 @@ from core.packet import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class ParamType(Enum):
+    """模块配置参数的数据类型枚举，供 GUI 动态渲染表单使用。"""
+    String = "string"
+    Int = "int"
+    Float = "float"
+    Bool = "bool"
+    Password = "password"    # 输入框隐藏明文
+    Select = "select"        # 下拉选择，需配合 selectable 字段
+    DirPath = "dirpath"      # 目录路径，GUI 可提供文件夹浏览器
+    FilePath = "filepath"    # 文件路径，GUI 可提供文件浏览器
+    List = "list"            # 列表（JSON 数组）
+    LanguageCode = "language_code"  # BCP-47 语言代码字符串
 
 
 class BaseModule(ABC):
@@ -163,6 +178,52 @@ class BaseModule(ABC):
 
     def on_after_stop(self) -> None:
         """Hook: 在工作线程退出后被调用。子类可覆盖执行资源释放。"""
+
+    # ------------------------------------------------------------------
+    # 模块元信息（@classmethod @abstractmethod，子类须实现）
+    # ------------------------------------------------------------------
+
+    @classmethod
+    @abstractmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        """
+        声明本模块从上游包中读取哪些字段。
+
+        返回字段描述列表，每项格式：
+            {
+                "name": str,          # 字段名（对应 MessagePacket.data 的 key）
+                "must_have": bool,    # True = 必须存在，False = 可选
+                "description": str,   # 字段用途说明
+            }
+        """
+
+    @classmethod
+    @abstractmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        """
+        声明本模块向下游包中写入哪些字段。
+
+        返回字段描述列表，格式同 require_attributes_in_packages。
+        """
+
+    @classmethod
+    @abstractmethod
+    def get_config_attributes(cls) -> list[dict]:
+        """
+        声明本模块支持的配置参数，供 GUI 动态渲染表单。
+
+        返回参数描述列表，每项格式：
+            {
+                "name": str,              # 参数名（对应 config["params"] 的 key）
+                "type": ParamType,        # 参数类型
+                "default": Any,           # 默认值（None 表示无默认）
+                "required": bool,         # 是否必填
+                "description": str,       # 参数说明
+                "selectable": list | None, # Select 类型的选项列表
+                "min": Any,               # Int/Float 的最小值（可选）
+                "max": Any,               # Int/Float 的最大值（可选）
+            }
+        """
 
     # ------------------------------------------------------------------
     # 内部运行循环（@abstractmethod，由子类 final 化）

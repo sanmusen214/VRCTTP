@@ -2,6 +2,135 @@
 
 `modules/` 目录包含所有具体业务实现，按功能分为四个子包：
 
+---
+
+## 模块元信息接口（ParamType + 三个类方法）
+
+### ParamType 枚举（`core/module.py`）
+
+每个模块类通过三个类方法（classmethod）对外暴露自身的**数据契约**和**配置参数描述**，GUI 动态表单和文档自动生成以此为基础。`ParamType` 用于标注配置参数的数据类型：
+
+| 枚举成员 | 值 | 含义 |
+|----------|-----|------|
+| `ParamType.String` | `"string"` | 普通文本输入 |
+| `ParamType.Int` | `"int"` | 整数（可设置 min/max） |
+| `ParamType.Float` | `"float"` | 浮点数 |
+| `ParamType.Bool` | `"bool"` | 布尔开关 |
+| `ParamType.Password` | `"password"` | 敏感文本（遮掩显示） |
+| `ParamType.Select` | `"select"` | 下拉单选（需提供 selectable 列表） |
+| `ParamType.DirPath` | `"dirpath"` | 目录路径选择器 |
+| `ParamType.FilePath` | `"filepath"` | 文件路径选择器 |
+| `ParamType.List` | `"list"` | JSON 列表输入 |
+| `ParamType.LanguageCode` | `"language_code"` | 语言代码（如 `"zh"`, `"en"`） |
+
+```python
+from core.module import ParamType
+print(ParamType.Password.value)  # → "password"
+```
+
+---
+
+### 三个抽象类方法
+
+所有叶子模块类都必须实现以下三个 `@classmethod`。
+
+#### `require_attributes_in_packages() → list[dict]`
+
+声明本模块从**上游包**（入参 packet）中读取哪些字段。
+
+返回字段 schema（每项为 dict）：
+
+| Key | 类型 | 说明 |
+|-----|------|------|
+| `name` | `str` | 字段名（对应 `packet.get(name)` 或 packet 属性名） |
+| `must_have` | `bool` | `True` = 必须存在，`False` = 可选消费 |
+| `description` | `str` | 字段用途描述 |
+
+示例（`VolcStreamingSTT`）：
+```python
+[
+  {"name": "audio_data",        "must_have": True,  "description": "PCM 音频字节数据"},
+  {"name": "is_final_segment",  "must_have": True,  "description": "是否为最终语音段"},
+  {"name": "is_partial",        "must_have": False, "description": "是否为流式中间帧"},
+  {"name": "is_speech_start",   "must_have": False, "description": "是否为语音段首帧"},
+]
+```
+
+---
+
+#### `add_attributes_in_packages() → list[dict]`
+
+声明本模块向**下游包**写入哪些字段（生产者写入 or 消费者添加）。
+
+返回与 `require_attributes_in_packages()` 相同的 schema。
+
+`PacketProducerModule` 子类（音频源）在此声明输出字段；`PacketConsumerModule` 子类若修改包内容则在此声明。纯消费者（如 Terminal、OSC）返回 `[]`。
+
+示例（`MicrophoneSource`）：
+```python
+[
+  {"name": "audio_data",        "must_have": True,  "description": "原始 PCM 音频字节"},
+  {"name": "sample_rate",       "must_have": True,  "description": "采样率（Hz）"},
+  {"name": "source_type",       "must_have": True,  "description": "音频源类型（microphone/loopback）"},
+  {"name": "source_name",       "must_have": True,  "description": "设备可读名称"},
+  {"name": "is_final_segment",  "must_have": True,  "description": "是否为最终语音段"},
+  {"name": "is_partial",        "must_have": True,  "description": "是否为流式中间帧"},
+  {"name": "is_speech_start",   "must_have": True,  "description": "是否为语音段首帧"},
+  {"name": "audio_chunk_idx",   "must_have": True,  "description": "段内帧序号（0-based）"},
+  {"name": "timestamp",         "must_have": True,  "description": "帧时间戳（UNIX 秒）"},
+]
+```
+
+---
+
+#### `get_config_attributes() → list[dict]`
+
+声明本模块接受的**配置参数**，为 GUI 表单动态生成和文档展示提供完整信息。
+
+返回字段 schema（每项为 dict）：
+
+| Key | 类型 | 说明 |
+|-----|------|------|
+| `name` | `str` | 参数名（对应 `config["params"][name]`） |
+| `type` | `ParamType` | 参数类型（影响 GUI 组件选择） |
+| `default` | `Any` | 默认值；`None` 表示无默认（必填） |
+| `required` | `bool` | 是否为必填项 |
+| `description` | `str` | 参数说明 |
+| `selectable` | `list \| None` | `ParamType.Select` 时的选项列表，其他类型为 `None` |
+| `min` | `Any` | 数值类型的最小值，不适用时为 `None` |
+| `max` | `Any` | 数值类型的最大值，不适用时为 `None` |
+
+示例（`VRChatOSCConsumer`）：
+```python
+[
+  {"name": "host",        "type": ParamType.String, "default": "127.0.0.1", "required": False, "description": "OSC 目标 IP",   "selectable": None, "min": None, "max": None},
+  {"name": "port",        "type": ParamType.Int,    "default": 9000,        "required": False, "description": "OSC 目标端口",  "selectable": None, "min": 1,    "max": 65535},
+  {"name": "trigger_sfx", "type": ParamType.Bool,   "default": False,       "required": False, "description": "通知音效",      "selectable": None, "min": None, "max": None},
+  {"name": "max_chars",   "type": ParamType.Int,    "default": 144,         "required": False, "description": "最大字符数",    "selectable": None, "min": 1,    "max": None},
+  {"name": "group_by",    "type": ParamType.String, "default": "",          "required": False, "description": "分组 key",      "selectable": None, "min": None, "max": None},
+]
+```
+
+---
+
+### 各模块 config_attributes 速查
+
+| 模块类 | 注册类型 | 配置参数数量 | 关键必填参数 |
+|--------|----------|-------------|-------------|
+| `MicrophoneSource` | `microphone` | 6 | — |
+| `LoopbackSource` | `loopback` | 6 | — |
+| `PacketFilter` | `filter` | 3 | `field` |
+| `VolcStreamingSTT` | `volc_streaming_stt` | 7 | — |
+| `LocalParaformerSTT` | `local_stt` | 6 | `model_path` |
+| `VolcMachineTranslation` | `volc_machine_translation` | 5 | `target_language` |
+| `BaiduMachineTranslation` | `baidu_machine_translation` | 4 | `app_id`, `app_key`, `target_language` |
+| `TerminalConsumer` | `terminal` | 2 | — |
+| `VRChatOSCConsumer` | `osc_vrchat` | 5 | — |
+
+---
+
+`modules/` 目录包含所有具体业务实现，按功能分为四个子包：
+
 ```
 modules/
 ├── audio/       PacketProducerModule 实现（音频捕获 + VAD）

@@ -34,6 +34,7 @@ from core.packet import (
     MessagePacket,
 )
 from modules.translation.base import BasePacketConsumerModule
+from core.module import ParamType
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,29 @@ class VolcMachineTranslation(BasePacketConsumerModule):
     在翻译链（translation_chain）中通常作为 VolcStreamingSTT 的下游：
         VolcStreamingSTT → VolcMachineTranslation → ConsumerModules
     """
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original", "must_have": True, "description": "上游 STT 识别出的原文"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_translated", "must_have": True,  "description": "翻译后的文字"},
+            {"name": "target_lang",     "must_have": True,  "description": "目标语言代码"},
+        ]
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "api_key",         "type": ParamType.Password,     "default": "",   "required": False, "description": "新版控制台 X-Api-Key（UUID）", "selectable": None},
+            {"name": "app_id",          "type": ParamType.String,       "default": "",   "required": False, "description": "旧版控制台 App ID（与 access_key 配合）", "selectable": None},
+            {"name": "access_key",      "type": ParamType.Password,     "default": "",   "required": False, "description": "旧版控制台 Access Key", "selectable": None},
+            {"name": "source_language", "type": ParamType.LanguageCode, "default": "",   "required": False, "description": "源语言（空字符串表示自动检测）", "selectable": None},
+            {"name": "target_language", "type": ParamType.LanguageCode, "default": "zh", "required": True,  "description": "目标语言（如 en / ja / zh）", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

@@ -45,7 +45,7 @@ from typing import Optional
 
 import aiohttp
 
-from core.module import PacketConsumerModule
+from core.module import PacketConsumerModule, ParamType
 from core.packet import (
     KEY_AUDIO_CHUNK_INDEX,
     KEY_AUDIO_DATA,
@@ -194,6 +194,35 @@ class VolcStreamingSTT(BasePacketConsumerModule):
         chunk_ms (int): 分块推送的时长（ms），默认 200
         streaming_mode (bool): 是否启用流式模式（配合流式音频源），默认 False
     """
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "audio_data",       "must_have": True,  "description": "16-bit PCM mono 音频字节"},
+            {"name": "is_final_segment", "must_have": True,  "description": "True 表示语音段已结束"},
+            {"name": "is_partial",       "must_have": False, "description": "流式模式 True=中间块"},
+            {"name": "is_speech_start",  "must_have": False, "description": "True 表示新语音段首帧（触发会话重置）"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original",    "must_have": True,  "description": "识别出的原文"},
+            {"name": "is_partial",       "must_have": True,  "description": "True=中间结果 / False=最终结果"},
+            {"name": "is_final_segment", "must_have": True,  "description": "True=语音段已结束"},
+        ]
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "api_key",        "type": ParamType.Password,     "default": "",                             "required": False, "description": "新版控制台 X-Api-Key（UUID）", "selectable": None},
+            {"name": "app_id",         "type": ParamType.String,       "default": "",                             "required": False, "description": "旧版控制台 App ID（与 access_key 配合使用）", "selectable": None},
+            {"name": "access_key",     "type": ParamType.Password,     "default": "",                             "required": False, "description": "旧版控制台 Access Key", "selectable": None},
+            {"name": "resource_id",    "type": ParamType.String,       "default": "volc.seedasr.sauc.duration",   "required": False, "description": "火山引擎资源 ID", "selectable": None},
+            {"name": "language",       "type": ParamType.LanguageCode, "default": "",                             "required": False, "description": "识别语言（如 zh-CN / en-US），空表示自动", "selectable": None},
+            {"name": "chunk_ms",       "type": ParamType.Int,          "default": 200,                            "required": False, "description": "分块推送时长（ms）", "selectable": None, "min": 50, "max": 2000},
+            {"name": "streaming_mode", "type": ParamType.Bool,         "default": True,                           "required": False, "description": "True=流式模式（配合流式音频源），False=批处理", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

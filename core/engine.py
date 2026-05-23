@@ -119,6 +119,10 @@ class PipelineEngine:
         with open(self.config_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def get_module_classes(self) -> dict[str, type[BaseModule]]:
+        """返回所有已注册模块类型的注册表（type 字符串 → 类）。"""
+        return {**PRODUCER_REGISTRY, **MODULE_REGISTRY}
+
     # ------------------------------------------------------------------
     # 构建 Pipeline
     # ------------------------------------------------------------------

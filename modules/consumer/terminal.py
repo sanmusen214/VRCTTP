@@ -27,7 +27,7 @@ from core.packet import (
     KEY_TEXT_TRANSLATED,
     MessagePacket,
 )
-from core.module import PacketConsumerModule
+from core.module import PacketConsumerModule, ParamType
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,24 @@ def unregister_gui_callback(fn: Callable[[str, str, str], None]) -> None:
 
 class TerminalConsumer(PacketConsumerModule):
     """将翻译结果打印到标准输出。"""
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original",   "must_have": False, "description": "原文（可为空）"},
+            {"name": "text_translated", "must_have": False, "description": "译文（可为空）"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return []
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "color",  "type": ParamType.Bool,   "default": True,           "required": False, "description": "是否使用 colorama 彩色输出", "selectable": None},
+            {"name": "format", "type": ParamType.String, "default": _DEFAULT_FORMAT, "required": False, "description": "输出格式，支持占位符: {pipeline_name} {text_original} {text_translated} {source_lang} {target_lang}", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)

@@ -26,7 +26,7 @@ import threading
 
 from pythonosc.udp_client import SimpleUDPClient
 
-from core.module import PacketConsumerModule
+from core.module import PacketConsumerModule, ParamType
 from core.packet import (
     KEY_IS_PARTIAL,
     KEY_TEXT_ORIGINAL,
@@ -45,6 +45,28 @@ CHATBOX_ADDRESS = "/chatbox/input"
 
 class VRChatOSCConsumer(PacketConsumerModule):
     """将翻译结果发送到 VRChat 聊天框（OSC 协议）。"""
+
+    @classmethod
+    def require_attributes_in_packages(cls) -> list[dict]:
+        return [
+            {"name": "text_original",   "must_have": False, "description": "原文（用于模板渲染）"},
+            {"name": "text_translated", "must_have": False, "description": "译文（默认发送此字段）"},
+            {"name": "target_lang",     "must_have": False, "description": "目标语言代码"},
+        ]
+
+    @classmethod
+    def add_attributes_in_packages(cls) -> list[dict]:
+        return []
+
+    @classmethod
+    def get_config_attributes(cls) -> list[dict]:
+        return [
+            {"name": "host",        "type": ParamType.String, "default": "127.0.0.1",         "required": False, "description": "OSC 目标地址", "selectable": None},
+            {"name": "port",        "type": ParamType.Int,    "default": 9000,                 "required": False, "description": "OSC 目标端口", "selectable": None, "min": 1, "max": 65535},
+            {"name": "trigger_sfx", "type": ParamType.Bool,   "default": False,                "required": False, "description": "是否触发 VRChat 通知音效", "selectable": None},
+            {"name": "max_chars",   "type": ParamType.Int,    "default": 144,                  "required": False, "description": "聊天框最大字符数（超出截断）", "selectable": None, "min": 1, "max": 144},
+            {"name": "group_by",    "type": ParamType.String, "default": "",                   "required": False, "description": "分组 key，如 \"timestamp_volc_stt\"，用于合并多路翻译显示", "selectable": None},
+        ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)
