@@ -123,6 +123,7 @@ PacketProducerModule
 PacketConsumerModule
 └── BasePacketConsumerModule（base.py）  公共配置字段
     ├── VolcStreamingSTT                  火山引擎流式 STT
+    ├── LocalParaformerSTT                本地 FunASR Paraformer STT
     ├── VolcMachineTranslation            火山引擎机器翻译
     └── BaiduMachineTranslation           百度通用翻译
 ```
@@ -200,15 +201,65 @@ PacketConsumerModule
 
 > **注意**：推荐通过管道中插入 `PacketFilter(final_only)` 节点在上游拦截
 
+---
+
+### LocalParaformerSTT（LocalSTTModel.py）
+
+注册类型：`"local_stt"`
+
+使用本地 FunASR `AutoModel`（默认 `paraformer-zh-streaming`）在无网络环境下做流式语音识别，无需任何 API Key。
+
+**两种工作模式（`streaming_mode`）：**
+
+| | `streaming_mode=False`（默认） | `streaming_mode=True` |
+|--|-------------------------------|----------------------|
+| 输入包 | `is_final_segment=True`（完整段） | 小块 chunk（流式音频源产出） |
+| 处理 | 整段数组分窗口依次推理（`is_final=True`） | 每积累 `chunk_size[1]*960` 样本（默认 600ms）推理一次 |
+| 输出 | 一个 `is_partial=False` 包 | 多个 `is_partial=True` + 最后一个 `is_partial=False` |
+
+**音频格式转换：**
+- 管道传入 16-bit PCM bytes（mono 16kHz）
+- 模型需要 float32 numpy 数组，转换公式：`pcm_int16 / 32768.0`
+
+**文字拼接行为（与云端 API 的关键差异）：**
+
+FunASR 本地模型每次 `generate()` 仅返回当前 chunk 的**增量词语**，而非已识别文字的完整累积（云端 API 通常会返回完整句子）。因此模块内部维护 `_accumulated_text`，将每个 chunk 的识别结果追加拼接：
+
+| 场景 | `KEY_TEXT_ORIGINAL` 内容 |
+|------|--------------------------|
+| partial 包（中间帧） | 本段语音迄今所有 chunk 结果的**拼接累积** |
+| final 包（最终帧） | 本段语音完整拼接结果 |
+
+示例（模型原始增量 → 包发出内容）：
+```
+第1帧 generate() → "你好"       → partial 包: "你好"
+第2帧 generate() → "世界"       → partial 包: "你好世界"
+最终帧 generate() → ""          → final   包: "你好世界"
+```
+
+`_accumulated_text` 在每段语音开始时重置（`is_speech_start=True` 或 `_reset_stream_state()`），段间互不影响。批处理模式（`_infer_full`）同理：各窗口结果拼接后一次性输出整句。
+
+**流式模式状态管理：**
+- 收到 `is_speech_start=True` 标志时自动重置 `_cache`、`_audio_buffer`、`_accumulated_text`（新语音段开始）
+- partial 结果通过 `send_to_downstream()` 直接发出（携带累积全文）
+- final 结果通过 `process_packet()` 返回列表由框架发出（携带完整全文）
+
+**生命周期钩子实现：**
+- `on_start()`：调用 `funasr.AutoModel(model=model_name, model_path=model_path)` 加载本地模型；`funasr` 为懒加载，不影响未使用此模块的 pipeline
+- `on_after_stop()`：清空 `_cache`、`_audio_buffer`、`_segment_source_packet`、`_accumulated_text`
+
 **Config 参数：**
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `api_key` | `""` | 火山引擎 API Key |
-| `app_id` | `""` | 旧版 App ID（备用） |
-| `access_key` | `""` | 旧版 Access Key（备用） |
-| `source_language` | `""` | 源语言（空=自动检测） |
-| `target_language` | `"zh"` | 目标语言 |
+| `model_path` | （必填） | 本地模型目录绝对路径 |
+| `model_name` | `"paraformer-zh-streaming"` | 传给 AutoModel 的 model 参数 |
+| `streaming_mode` | `false` | `true` 开启流式推理模式 |
+| `chunk_size` | `[0, 10, 5]` | FunASR chunk_size，决定单次推理窗口（`chunk_size[1]*960` 样本） |
+| `encoder_chunk_look_back` | `4` | Encoder 自注意力回看 chunk 数 |
+| `decoder_chunk_look_back` | `1` | Decoder 交叉注意力回看 chunk 数 |
+
+> **注意：** 使用前需安装 `funasr`：`pip install funasr`。批处理模式（`streaming_mode=false`）可搭配音频源 `mode="batch"`；流式模式必须搭配 `mode="streaming"`。
 
 ---
 

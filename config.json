@@ -30,6 +30,26 @@
     },
 
     "_comment_stt": "── 语音识别模块 ─────────────────────────────────────────",
+    "local_stt": {
+      "_comment": [
+        "本地 FunASR Paraformer 流式语音识别，无需网络和 API Key。",
+        "依赖安装：pip install funasr",
+        "model_path 填写本地模型目录的绝对路径，示例模型：",
+        "  speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online（中文）",
+        "streaming_mode=true 时需搭配音频源 mode=\"streaming\"，每 600ms 出一次中间结果。",
+        "streaming_mode=false 时搭配音频源 mode=\"batch\"，语音段结束后一次性输出最终结果。",
+        "输出包字段与 volc_streaming_stt 完全一致，可接同一套下游模块（MT/Filter/OSC等）。"
+      ],
+      "type": "local_stt",
+      "params": {
+        "model_path": "C:\\Users\\11137\\myfolder\\source\\models\\DL_models\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
+        "model_name": "paraformer-zh-streaming",
+        "streaming_mode": true,
+        "chunk_size": [0, 10, 5],
+        "encoder_chunk_look_back": 4,
+        "decoder_chunk_look_back": 1
+      }
+    },
     "volc_stt": {
       "type": "volc_streaming_stt",
       "params": {
@@ -59,13 +79,22 @@
         "target_language": "ja"
       }
     },
-    "mt_zh_baidu": {
+    "mt_en_baidu": {
       "type": "baidu_machine_translation",
       "params": {
         "app_id": "${BAIDU_APP_ID}",
         "app_key": "${BAIDU_APP_KEY}",
         "source_language": "auto",
         "target_language": "en"
+      }
+    },
+    "mt_jp_baidu": {
+      "type": "baidu_machine_translation",
+      "params": {
+        "app_id": "${BAIDU_APP_ID}",
+        "app_key": "${BAIDU_APP_KEY}",
+        "source_language": "auto",
+        "target_language": "jp"
       }
     },
 
@@ -83,8 +112,7 @@
         "host": "127.0.0.1",
         "port": 9000,
         "trigger_sfx": false,
-        "group_by": "timestamp_microphone_system",
-        "group_numbers": 1
+        "group_by": "timestamp_microphone_system"
       }
     },
 
@@ -123,14 +151,40 @@
       "_comment_enable": "将 enabled 改为 true 启用（需配置 VOLC_API_KEY）。",
       "id": "vrchat_bilingual",
       "name": "VRChat英语→中日双语",
-      "enabled": true,
+      "enabled": false,
       "graph": {
         "entry": "microphone_system",
         "routes": {
-          "microphone_system": ["volc_stt"],
-          "volc_stt":        ["mt_zh_baidu"],
+          "loopback_vrchat": ["volc_stt"],
+          "volc_stt":        ["mt_jp_baidu"],
           "final_only":      [],
-          "mt_zh_baidu":     ["terminal_out","osc_out"]
+          "mt_en_baidu":     ["terminal_out","osc_out"],
+          "mt_jp_baidu":     ["terminal_out","osc_out"]
+
+        }
+      }
+    },
+
+    {
+      "_comment": [
+        "【示例：本地 STT + 机器翻译管道】使用本地 FunASR 模型识别中文语音，再翻译为英文输出到终端。",
+        "无需任何 API Key，完全离线运行。",
+        "启用前请先：",
+        "  1. pip install funasr",
+        "  2. 将 local_stt.params.model_path 改为实际模型目录",
+        "  3. 将 enabled 改为 true"
+      ],
+      "id": "local_stt_demo",
+      "name": "本地STT中文→英文（离线）",
+      "enabled": true,
+      "graph": {
+        "_comment": "音频源使用 streaming 模式，local_stt 以 streaming_mode=true 输出流式中间结果。",
+        "_comment_filter": "final_only 过滤掉中间帧，只让最终识别结果进入翻译环节。",
+        "entry": "microphone_system",
+        "routes": {
+          "microphone_system": ["local_stt"],
+          "local_stt":         ["mt_en_baidu"],
+          "mt_en_baidu":        ["terminal_out"]
         }
       }
     }

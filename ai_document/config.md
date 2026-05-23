@@ -33,6 +33,7 @@
 | `"microphone"` | `MicrophoneSource` | 麦克风音频源 |
 | `"loopback"` | `LoopbackSource` | 系统音频环回源 |
 | `"volc_streaming_stt"` | `VolcStreamingSTT` | 火山引擎流式 STT |
+| `"local_stt"` | `LocalParaformerSTT` | 本地 FunASR Paraformer STT（无需网络） |
 | `"volc_machine_translation"` | `VolcMachineTranslation` | 火山引擎机器翻译 |
 | `"baidu_machine_translation"` | `BaiduMachineTranslation` | 百度通用翻译 |
 | `"terminal"` | `TerminalConsumer` | 终端输出 |
@@ -201,6 +202,24 @@ GUI 为可选功能。`enabled: false` 时不启动 Web 服务器，程序仍可
   }
 }
 ```
+
+### local_stt（本地 FunASR STT）
+
+```json
+"local_stt": {
+  "type": "local_stt",
+  "params": {
+    "model_path": "C:\\path\\to\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
+    "model_name": "paraformer-zh-streaming",
+    "streaming_mode": true,   // true 需搭配音频源 mode="streaming"
+    "chunk_size": [0, 10, 5], // 单次推理窗口：chunk_size[1]*960 样本 = 600ms
+    "encoder_chunk_look_back": 4,
+    "decoder_chunk_look_back": 1
+  }
+}
+```
+
+> 使用前请先安装依赖：`pip install funasr`
 
 ---
 
