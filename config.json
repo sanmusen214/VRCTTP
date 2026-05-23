@@ -183,8 +183,9 @@
         "entry": "microphone_system",
         "routes": {
           "microphone_system": ["local_stt"],
-          "local_stt":         ["mt_en_baidu"],
-          "mt_en_baidu":        ["terminal_out"]
+          "local_stt":         ["mt_en_baidu", "mt_jp_baidu"],
+          "mt_en_baidu":        ["terminal_out", "osc_out"],
+          "mt_jp_baidu":        ["terminal_out", "osc_out"]
         }
       }
     }

@@ -54,7 +54,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         self._max_chars: int = int(config.get("max_chars", VRCHAT_CHATBOX_MAX_CHARS))
         self._client: SimpleUDPClient | None = None
         self._group_by: str = config.get("group_by", "")
-        self._group_numbers: int = int(config.get("group_numbers", 1))
+        self._group_numbers: int = 1
         self.last_10_any_packages: list[MessagePacket] = []  # 记录之前的十个包（不论是否含翻译结果）
         self.last_10_translated_packages: list[MessagePacket] = []  # 记录之前的十个包(含翻译结果)
         self._last_update_text_content = None # 记录上次更新窗口内容的文本，避免重复发送相同内容
@@ -130,6 +130,8 @@ class VRChatOSCConsumer(PacketConsumerModule):
         for p in self.last_10_translated_packages:
             if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED):
                 existing_langs.add(p.get(KEY_TARGET_LANG))
+        # 根据历史列表里有几种语言，设置这次聚合目标语言数量 group_numbers
+        self._group_numbers = len(existing_langs)
         sorted_existing_langs = sorted(list(existing_langs))
         # 4. 按语言顺序拼接翻译结果
         translated = ""
