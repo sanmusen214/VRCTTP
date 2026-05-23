@@ -62,7 +62,7 @@
       }
     },
     "_comment_mt": "── 机器翻译模块 ─────────────────────────────────────────",
-    "mt_en": {
+    "volc_mt_en": {
       "type": "volc_machine_translation",
       "params": {
         "_comment": "新版控制台用 api_key（UUID）；旧版改用 app_id + access_key",
@@ -71,7 +71,7 @@
         "target_language": "en"
       }
     },
-    "mt_ja": {
+    "volc_mt_ja": {
       "type": "volc_machine_translation",
       "params": {
         "api_key": "${VOLC_API_KEY}",
@@ -111,7 +111,7 @@
         "host": "127.0.0.1",
         "port": 9000,
         "trigger_sfx": false,
-        "group_by": "timestamp_microphone_system"
+        "group_by": "timestamp_gui_text_pipe"
       }
     },
     "_comment_filter": "── 过滤器模块 ─────────────────────────────────────────",
@@ -123,23 +123,10 @@
         "pass_when": false
       }
     },
-    "temp_baidu_module": {
-      "type": "baidu_machine_translation",
+    "gui_text_pipe": {
+      "type": "text_input",
       "params": {
-        "app_id": "sgaesgaghaeh",
-        "app_key": "ehaegergdfgsdrhdrh",
-        "source_language": "auto",
-        "target_language": "zh"
-      }
-    },
-    "osc_output_vrc_audio_group": {
-      "type": "osc_vrchat",
-      "params": {
-        "host": "127.0.0.1",
-        "port": 9000,
-        "trigger_sfx": false,
-        "max_chars": 144,
-        "group_by": "timestamp_loopback_vrchat"
+        "source_lang": "auto"
       }
     }
   },
@@ -158,39 +145,9 @@
             "volc_stt"
           ],
           "volc_stt": [
-            "terminal_out",
-            "final_only"
+            "volc_mt_en"
           ],
-          "final_only": [
-            "mt_en"
-          ],
-          "mt_en": [
-            "osc_out"
-          ]
-        }
-      }
-    },
-    {
-      "_comment": "【示例：双语输出管道】STT 识别后并行翻译成中文和日文，两路结果合并显示在同一行。",
-      "_comment_enable": "将 enabled 改为 true 启用（需配置 VOLC_API_KEY）。",
-      "id": "vrchat_bilingual",
-      "name": "VRChat英语→中日双语",
-      "enabled": false,
-      "graph": {
-        "entry": "microphone_system",
-        "routes": {
-          "microphone_system": [
-            "volc_stt"
-          ],
-          "volc_stt": [
-            "mt_jp_baidu",
-            "mt_en_baidu"
-          ],
-          "mt_en_baidu": [
-            "terminal_out",
-            "osc_out"
-          ],
-          "mt_jp_baidu": [
+          "volc_mt_en": [
             "terminal_out",
             "osc_out"
           ]
@@ -206,18 +163,16 @@
         "  2. 将 local_stt.params.model_path 改为实际模型目录",
         "  3. 将 enabled 改为 true"
       ],
-      "id": "local_stt_demo",
+      "id": "local_stt_streaming_demo",
       "name": "本地STT中文→英文（离线）",
-      "enabled": false,
+      "enabled": true,
       "graph": {
-        "_comment": "音频源使用 streaming 模式，local_stt 以 streaming_mode=true 输出流式中间结果。",
-        "_comment_filter": "final_only 过滤掉中间帧，只让最终识别结果进入翻译环节。",
         "entry": "microphone_system",
         "routes": {
           "microphone_system": [
             "local_stt"
           ],
-          "local_stt": [
+          "gui_text_pipe": [
             "mt_en_baidu",
             "mt_jp_baidu"
           ],
@@ -228,57 +183,9 @@
           "mt_jp_baidu": [
             "terminal_out",
             "osc_out"
-          ]
-        }
-      }
-    },
-    {
-      "id": "test_pipeline",
-      "name": "测试管道",
-      "enabled": false,
-      "graph": {
-        "entry": "microphone_system",
-        "routes": {
-          "microphone_system": [
-            "local_stt"
           ],
           "local_stt": [
-            "osc_out"
-          ]
-        }
-      }
-    },
-    {
-      "id": "testPipiline2",
-      "name": "ceshi2",
-      "enabled": false,
-      "graph": {
-        "entry": "loopback_vrchat",
-        "routes": {
-          "loopback_vrchat": [
-            "local_stt"
-          ],
-          "local_stt": [
-            "osc_out"
-          ]
-        }
-      }
-    },
-    {
-      "id": "ce2",
-      "name": "ce23",
-      "enabled": true,
-      "graph": {
-        "entry": "loopback_vrchat",
-        "routes": {
-          "loopback_vrchat": [
-            "local_stt"
-          ],
-          "local_stt": [
-            "mt_en_baidu"
-          ],
-          "mt_en_baidu": [
-            "osc_output_vrc_audio_group"
+            "gui_text_pipe"
           ]
         }
       }

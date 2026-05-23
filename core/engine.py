@@ -27,6 +27,7 @@ from modules.audio.microphone import MicrophoneSource
 from modules.consumer.osc_vrchat import VRChatOSCConsumer
 from modules.consumer.terminal import TerminalConsumer
 from modules.filter.packet_filter import PacketFilter
+from modules.input.text_input import TextInput
 from modules.translation.baidu_machine_translation import BaiduMachineTranslation
 from modules.translation.LocalSTTModel import LocalParaformerSTT
 from modules.translation.volc_machine_translation import VolcMachineTranslation
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 PRODUCER_REGISTRY: dict[str, type[PacketProducerModule]] = {
     "microphone": MicrophoneSource,
     "loopback": LoopbackSource,
+    "text_input": TextInput,
 }
 
 MODULE_REGISTRY: dict[str, type[PacketConsumerModule]] = {

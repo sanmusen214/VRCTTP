@@ -134,6 +134,7 @@ print(ParamType.Password.value)  # → "password"
 ```
 modules/
 ├── audio/       PacketProducerModule 实现（音频捕获 + VAD）
+├── input/       文字输入来源（GUI 注入与上游透传）
 ├── translation/ 语音识别（STT）+ 机器翻译（MT）
 ├── filter/      通用包过滤器
 └── consumer/    最终消费者（终端输出 + OSC 发送）
@@ -241,6 +242,26 @@ PacketProducerModule
 | 参数 | 说明 |
 |------|------|
 | `process_name` | 目标进程名（如 `"VRChat.exe"`），`null` 使用默认扬声器 |
+
+---
+
+## modules/input/ — 文本输入与透传
+
+### TextInput (text_input.py)
+
+注册类型：`"text_input"`
+
+该模块既可以是流程头（Producer），也可以串联在流程中间。它具备双重功能：
+1. **上游透传**：像阀门一般，若上门存在发送给它的普通数据包，它将保持原样透传。
+2. **GUI 注入**：配合 GUI `/input` 页面，提供交互输入框。用户主动提交的文本将被封装为含有 `text_original`、`is_final_segment=True` 的标准化数据包，并自动混流发往下游。
+
+> **最佳实践：** 常用于手动发送语句进行翻译、或是在无法捕获游戏声音时直接手动打字。
+
+**Config 参数：**
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `source_lang` | `"auto"`| 给从 GUI 注入的数据包标记的来源语言类型 |
 
 ---
 

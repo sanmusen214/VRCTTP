@@ -45,7 +45,7 @@ def create_app(engine: "PipelineEngine") -> None:
 
     # 注册所有页面路由
     from nicegui import app
-    from gui.pages import home, output_page, pipelines_page, modules_page, config_page, env_page
+    from gui.pages import home, output_page, pipelines_page, modules_page, config_page, env_page, input_page
 
     home.register(app)
     output_page.register(app)
@@ -53,5 +53,6 @@ def create_app(engine: "PipelineEngine") -> None:
     modules_page.register(app)
     config_page.register(app)
     env_page.register(app)
+    input_page.register(app)
 
-    logger.info("GUI 页面已注册（6 个路由）")
+    logger.info("GUI 页面已注册（7 个路由）")

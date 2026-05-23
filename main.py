@@ -89,7 +89,6 @@ def _start_gui(engine, host: str, port: int) -> threading.Thread:
             reload=False,
             show=False,
             title="VRChat 实时翻译流",
-            storage_secret="vrcls-gui-storage-secret",
         )
 
     t = threading.Thread(target=_run, name="nicegui", daemon=True)

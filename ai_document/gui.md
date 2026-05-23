@@ -22,7 +22,8 @@ gui/
     ├── pipelines_page.py         # /pipelines 管道 CRUD（创建/删除/路由编辑）
     ├── modules_page.py           # /modules  模块实例 CRUD + 类型参考
     ├── config_page.py            # /config   原始 JSON 配置编辑器
-    └── env_page.py               # /env      .env 环境变量编辑器
+    ├── env_page.py               # /env      .env 环境变量编辑器
+    └── input_page.py             # /input    直接向模块注入文字的测试控制台
 ```
 
 ---
@@ -270,6 +271,17 @@ ref_id 非空校验 → 无重名校验
 #### 区块 C — 模块类型参考（只读，默认折叠）
 
 `ui.expansion("模块类型参考（只读）", value=False)` 内，对每个已注册类型渲染三张元信息表格：require_attributes、add_attributes、config_attributes。直接消费类方法，无需手写文档即可自动生成契约视图。
+
+---
+
+### `/input` — 文字输入控制台（input_page.py）
+
+与底层的 `TextInput` 模块联动。如果当前的活动管道中含有 `text_input` 实例，此页面会自动捕获这些实例对象，并为每一项创建一个输入框视图。
+
+**工作原理：**
+- 从 `TextInput._instances` 动态扫描并挂载正在运行的注入节点实例。
+- GUI 端使用 `ui.refreshable` 来渲染这些输入框，方便对运行中的模块热插拔响应。
+- 文本提交后，UI 的输入框将被清空，文本内容将被压入底层对应模块的线程安全队列（`queue.Queue`）中。
 
 ---
 
