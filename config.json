@@ -7,7 +7,7 @@
   ],
   "modules": {
     "_comment_audio": "── 音频源模块 ──────────────────────────────────────────",
-    "loopback_vrchat": {
+    "流式音频": {
       "type": "loopback",
       "params": {
         "process_name": "VRChat.exe",
@@ -17,7 +17,7 @@
         "chunk_ms": 200
       }
     },
-    "microphone_system": {
+    "流式麦克风": {
       "type": "microphone",
       "params": {
         "sample_rate": 16000,
@@ -26,7 +26,7 @@
         "chunk_ms": 200
       }
     },
-    "loopback_batch": {
+    "分句音频": {
       "type": "loopback",
       "params": {
         "process_name": "VRChat.exe",
@@ -36,8 +36,17 @@
         "chunk_ms": 200
       }
     },
+    "分句麦克风": {
+      "type": "microphone",
+      "params": {
+        "sample_rate": 16000,
+        "vad_mode": 3,
+        "mode": "batch",
+        "chunk_ms": 200
+      }
+    },
     "_comment_stt": "── 语音识别模块 ─────────────────────────────────────────",
-    "local_stt": {
+    "流式识别-本地": {
       "_comment": [
         "本地 FunASR Paraformer 流式语音识别，无需网络和 API Key。",
         "依赖安装：pip install funasr",
@@ -49,7 +58,7 @@
       ],
       "type": "local_stt",
       "params": {
-        "model_path": "C:\\Users\\11137\\myfolder\\source\\models\\DL_models\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
+        "model_path": ".models\\paraformer",
         "model_name": "paraformer-zh-streaming",
         "streaming_mode": true,
         "chunk_size": [
@@ -61,15 +70,15 @@
         "decoder_chunk_look_back": 1
       }
     },
-    "local_stt_batch": {
+    "分句识别-本地": {
       "type": "local_stt",
       "params": {
-        "model_path": "C:\\Users\\11137\\myfolder\\source\\models\\DL_models\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
-        "model_name": "paraformer-zh-streaming",
+        "model_path": "models\\SenseVoiceSmall",
+        "model_name": "iic/SenseVoiceSmall",
         "streaming_mode": false
       }
     },
-    "volc_stt": {
+    "流式识别-火山豆包API": {
       "type": "volc_streaming_stt",
       "params": {
         "_comment": "新版控制台用 api_key（UUID），旧版控制台改用 app_id + access_key",
@@ -80,7 +89,7 @@
       }
     },
     "_comment_mt": "── 机器翻译模块 ─────────────────────────────────────────",
-    "volc_mt_en": {
+    "翻译到英文-火山豆包API": {
       "type": "volc_machine_translation",
       "params": {
         "_comment": "新版控制台用 api_key（UUID）；旧版改用 app_id + access_key",
@@ -89,7 +98,7 @@
         "target_language": "en"
       }
     },
-    "volc_mt_ja": {
+    "翻译到日文-火山豆包API": {
       "type": "volc_machine_translation",
       "params": {
         "api_key": "${VOLC_API_KEY}",
@@ -97,7 +106,7 @@
         "target_language": "ja"
       }
     },
-    "mt_en_baidu": {
+    "翻译到英文-百度翻译API": {
       "type": "baidu_machine_translation",
       "params": {
         "app_id": "${BAIDU_APP_ID}",
@@ -106,7 +115,7 @@
         "target_language": "en"
       }
     },
-    "mt_jp_baidu": {
+    "翻译到日文-百度翻译API": {
       "type": "baidu_machine_translation",
       "params": {
         "app_id": "${BAIDU_APP_ID}",
@@ -116,24 +125,24 @@
       }
     },
     "_comment_consumer": "── 消费者模块 ───────────────────────────────────────────",
-    "terminal_out": {
+    "软件日志输出": {
       "type": "terminal",
       "params": {
         "color": true,
         "_comment_grouping": "group_by 指向两条翻译分支的公共祖先节点时间戳。收到新包立即渲染，同一时间戳的包合并显示，新时间戳丢弃旧内容。"
       }
     },
-    "osc_out": {
+    "VRChat输出": {
       "type": "osc_vrchat",
       "params": {
         "host": "127.0.0.1",
         "port": 9000,
         "trigger_sfx": false,
-        "group_by": "timestamp_gui_text_pipe"
+        "group_by": "timestamp_中间件-GUI输入文字"
       }
     },
-    "_comment_filter": "── 过滤器模块 ─────────────────────────────────────────",
-    "final_only": {
+    "_comment_filter": "── 中间件模块 ─────────────────────────────────────────",
+    "中间件-完整句子过滤器": {
       "type": "filter",
       "params": {
         "_comment": "只放行最终识别结果（is_partial=false），中间流式包被丢弃，不进入翻译环节",
@@ -141,7 +150,7 @@
         "pass_when": false
       }
     },
-    "gui_text_pipe": {
+    "中间件-GUI输入文字": {
       "type": "text_input",
       "params": {
         "source_lang": "auto"
@@ -151,78 +160,49 @@
   "pipelines": [
     {
       "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
-      "id": "vrchat_volc_streaming",
-      "name": "VRChat英语→中文（火山引擎流式）",
+      "id": "mic_volc_streaming",
+      "name": "麦克风中文到英语（流式-火山引擎API）",
       "enabled": false,
       "graph": {
         "_comment": "entry 必须是 PacketProducerModule 类型的 ref_id；routes 用邻接表描述所有模块连接。",
         "_comment_filter": "final_only 过滤器拦截中间流式贵包（is_partial=true），只允许最终结果进入翻译环节。",
-        "entry": "loopback_vrchat",
+        "entry": "流式麦克风",
         "routes": {
-          "loopback_vrchat": [
-            "volc_stt"
+          "流式麦克风": [
+            "流式识别-火山豆包API"
           ],
-          "volc_stt": [
-            "volc_mt_en"
+          "流式识别-火山豆包API": [
+            "中间件-GUI输入文字"
           ],
-          "volc_mt_en": [
-            "terminal_out",
-            "osc_out"
+          "中间件-GUI输入文字": [
+            "翻译到英文-火山豆包API"
+          ],
+          "翻译到英文-火山豆包API": [
+            "软件日志输出",
+            "VRChat输出"
           ]
         }
       }
     },
     {
-      "_comment": [
-        "【示例：本地 STT + 机器翻译管道】使用本地 FunASR 模型识别中文语音，再翻译为英文输出到终端。",
-        "无需任何 API Key，完全离线运行。",
-        "启用前请先：",
-        "  1. pip install funasr",
-        "  2. 将 local_stt.params.model_path 改为实际模型目录",
-        "  3. 将 enabled 改为 true"
-      ],
-      "id": "local_stt_streaming_demo",
-      "name": "本地STT中文→英文（离线）",
-      "enabled": false,
-      "graph": {
-        "entry": "loopback_vrchat",
-        "routes": {
-          "loopback_vrchat": [
-            "local_stt"
-          ],
-          "gui_text_pipe": [
-            "mt_en_baidu",
-            "mt_jp_baidu"
-          ],
-          "mt_en_baidu": [
-            "terminal_out",
-            "osc_out"
-          ],
-          "mt_jp_baidu": [
-            "terminal_out",
-            "osc_out"
-          ],
-          "local_stt": [
-            "gui_text_pipe"
-          ]
-        }
-      }
-    },
-    {
-      "id": "local_stt_demo",
-      "name": "本地STT中文→英文（非流式）",
+      "id": "mic_local_stt",
+      "name": "麦克风中文到英语（分句-本地识别-百度翻译）",
       "enabled": true,
       "graph": {
-        "entry": "loopback_batch",
+        "entry": "分句麦克风",
         "routes": {
-          "loopback_batch": [
-            "local_stt_batch"
+          "分句麦克风": [
+            "分句识别-本地"
           ],
-          "local_stt_batch": [
-            "mt_en_baidu"
+          "分句识别-本地": [
+            "中间件-GUI输入文字"
           ],
-          "mt_en_baidu": [
-            "terminal_out"
+          "中间件-GUI输入文字": [
+            "翻译到英文-百度翻译API"
+          ],
+          "翻译到英文-百度翻译API": [
+            "软件日志输出",
+            "VRChat输出"
           ]
         }
       }
