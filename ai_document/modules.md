@@ -162,14 +162,14 @@ PacketProducerModule
 #### 批处理模式（`mode="batch"`，默认）
 
 1. 以 30ms 帧读取音频
-2. 300ms 前置窗口判断：窗口内 ≥75% 有声帧 → 语音开始
-3. 积累到 300ms 后置窗口 ≥75% 无声帧 → 语音结束
+2. 450ms 前置窗口判断：窗口内 >=85% 有声帧 → 语音开始（并将判定点之前的 450ms 也包含进最终包，避免吞音）
+3. 积累到 450ms 后置窗口 >=80% 无声帧 → 语音结束
 4. 超长截断（默认 15s）：在缓冲区找离端点最近的自然停顿拆分，前段发出，后段继续积累（不丢弃）
 5. 输出一个 `is_final_segment=True, is_partial=False` 的包
 
 #### 流式模式（`mode="streaming"`）
 
-1. VAD 开始检测到语音
+1. VAD 开始检测到语音（同样会将判定点之前的 450ms 包裹在首块发出防吞音）
 2. 语音期间每 `chunk_ms`（默认 200ms）emit 一个包：
    - `is_partial=True, is_final_segment=False`
    - 首块额外标注 `is_speech_start=True`

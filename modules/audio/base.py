@@ -59,11 +59,12 @@ FRAME_DURATION_MS = 30           # 30ms 每帧（webrtcvad 支持 10/20/30ms）
 FRAME_SAMPLES = TARGET_SAMPLE_RATE * FRAME_DURATION_MS // 1000  # = 480 samples
 FRAME_BYTES = FRAME_SAMPLES * 2  # int16 = 2 bytes/sample
 
-PADDING_DURATION_MS = 300        # 前/后补丁窗口长度
-PADDING_FRAMES = PADDING_DURATION_MS // FRAME_DURATION_MS  # = 10 frames
+PADDING_DURATION_MS = 450        # 前/后补丁窗口长度（加长以减少短促误触发）
+PADDING_FRAMES = PADDING_DURATION_MS // FRAME_DURATION_MS  # = 15 frames
+PRE_START_RETAIN_FRAMES = PADDING_FRAMES  # 保留触发前的额外帧（即额外采纳上一个判断周期）
 
-START_RATIO = 0.75   # 窗口中有声帧比例 ≥ 此值 → 语音开始
-END_RATIO = 0.75     # 无声帧比例 ≥ 此值 → 语音结束
+START_RATIO = 0.85   # 窗口中有声帧比例 >= 此值 -> 语音开始
+END_RATIO = 0.8      # 无声帧比例 >= 此值 -> 语音结束
 
 DEFAULT_MAX_SEGMENT_SECONDS = 15  # 默认最大片段时长
 DEFAULT_CHUNK_MS = 200            # 流式模式下每包音频时长（ms）
@@ -162,7 +163,7 @@ class VADPacketProducerModule(PacketProducerModule):
         """
         max_frames = int(self._max_segment_seconds * 1000 / FRAME_DURATION_MS)
 
-        ring = collections.deque(maxlen=PADDING_FRAMES)  # 语音开始检测环形缓冲
+        ring = collections.deque(maxlen=PADDING_FRAMES + PRE_START_RETAIN_FRAMES)  # 语音开始检测环形缓冲 + 上一个窗口
         voiced_buffer: list[bytes] = []
         triggered = False
         end_padding: list[bool] = []
@@ -193,8 +194,11 @@ class VADPacketProducerModule(PacketProducerModule):
 
                 if not triggered:
                     ring.append((frame, is_speech))
-                    num_voiced = sum(1 for _, s in ring if s)
-                    if len(ring) == PADDING_FRAMES and num_voiced / len(ring) >= START_RATIO:
+                    
+                    recent_frames = list(ring)[-PADDING_FRAMES:]
+                    num_voiced = sum(1 for _, s in recent_frames if s)
+                    
+                    if len(recent_frames) == PADDING_FRAMES and num_voiced / PADDING_FRAMES >= START_RATIO:
                         triggered = True
                         voiced_buffer = [f for f, _ in ring]
                         ring.clear()
@@ -285,7 +289,7 @@ class VADPacketProducerModule(PacketProducerModule):
         """
         chunk_frames = max(1, self._chunk_ms // FRAME_DURATION_MS)
 
-        ring = collections.deque(maxlen=PADDING_FRAMES)
+        ring = collections.deque(maxlen=PADDING_FRAMES + PRE_START_RETAIN_FRAMES)
         frame_buffer: list[bytes] = []   # 当前块积累的帧
         end_padding: list[bool] = []
         triggered = False
@@ -318,8 +322,11 @@ class VADPacketProducerModule(PacketProducerModule):
 
                 if not triggered:
                     ring.append((frame, is_speech))
-                    num_voiced = sum(1 for _, s in ring if s)
-                    if len(ring) == PADDING_FRAMES and num_voiced / len(ring) >= START_RATIO:
+                    
+                    recent_frames = list(ring)[-PADDING_FRAMES:]
+                    num_voiced = sum(1 for _, s in recent_frames if s)
+                    
+                    if len(recent_frames) == PADDING_FRAMES and num_voiced / PADDING_FRAMES >= START_RATIO:
                         # 语音开始
                         triggered = True
                         is_first_chunk = True

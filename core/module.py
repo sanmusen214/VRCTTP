@@ -83,7 +83,8 @@ class BaseModule(ABC):
         # 本地引用 ID：由 engine 通过 config["_ref_id"] 注入
         self._ref_id: str = config.get("_ref_id", module_id)
         self._downstream: list[BaseModule] = []
-        self.input_queue: queue.Queue[MessagePacket | None] = queue.Queue(maxsize=200)
+        _queue_size = config.get("_queue_size", 2)
+        self.input_queue: queue.Queue[MessagePacket | None] = queue.Queue(maxsize=_queue_size)
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
@@ -111,25 +112,31 @@ class BaseModule(ABC):
         """
         if not self._downstream:
             return
+
+        def _put_with_clear(q: queue.Queue, pkt: MessagePacket, ds_id: str) -> None:
+            try:
+                q.put_nowait(pkt)
+            except queue.Full:
+                logger.warning("[%s] 下游 %s 队列已满，清空旧包", self.module_id, ds_id)
+                # 清空旧包
+                while not q.empty():
+                    try:
+                        q.get_nowait()
+                    except queue.Empty:
+                        break
+                # 重新入队
+                try:
+                    q.put_nowait(pkt)
+                except queue.Full:
+                    pass
+
         # 发出前打上本节点时间戳，克隆包会携带该时间戳
         packet.mark_node_time(self._ref_id)
         if len(self._downstream) == 1:
-            try:
-                self._downstream[0].input_queue.put_nowait(packet)
-            except queue.Full:
-                logger.warning(
-                    "[%s] 下游 %s 队列已满，丢弃包",
-                    self.module_id, self._downstream[0].module_id,
-                )
+            _put_with_clear(self._downstream[0].input_queue, packet, self._downstream[0].module_id)
         else:
             for ds in self._downstream:
-                try:
-                    ds.input_queue.put_nowait(packet.clone())
-                except queue.Full:
-                    logger.warning(
-                        "[%s] 下游 %s 队列已满，丢弃包",
-                        self.module_id, ds.module_id,
-                    )
+                _put_with_clear(ds.input_queue, packet.clone(), ds.module_id)
 
     # ------------------------------------------------------------------
     # 生命周期（@final）

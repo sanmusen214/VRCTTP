@@ -110,7 +110,7 @@ BaseModule
 |------|------|
 | `module_id` | 完整 ID，如 `"vrchat_volc_streaming.volc_stt"`，用于日志 |
 | `_ref_id` | 本地引用 ID，如 `"volc_stt"`，来自 `config["_ref_id"]`（由 engine 注入） |
-| `input_queue` | `Queue(maxsize=200)`，生产者写入，消费者读取 |
+| `input_queue` | `Queue(maxsize=pipeline_queue_size)`，大小在全局 `config` 可配（默认 2）。满载后自动丢弃旧包塞入新包，避免拥塞延时。 |
 | `_stop_event` | `threading.Event()`，置位表示请求停止 |
 
 ### PacketProducerModule

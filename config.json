@@ -26,6 +26,16 @@
         "chunk_ms": 200
       }
     },
+    "loopback_batch": {
+      "type": "loopback",
+      "params": {
+        "process_name": "VRChat.exe",
+        "sample_rate": 16000,
+        "vad_mode": 3,
+        "mode": "batch",
+        "chunk_ms": 200
+      }
+    },
     "_comment_stt": "── 语音识别模块 ─────────────────────────────────────────",
     "local_stt": {
       "_comment": [
@@ -49,6 +59,14 @@
         ],
         "encoder_chunk_look_back": 4,
         "decoder_chunk_look_back": 1
+      }
+    },
+    "local_stt_batch": {
+      "type": "local_stt",
+      "params": {
+        "model_path": "C:\\Users\\11137\\myfolder\\source\\models\\DL_models\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
+        "model_name": "paraformer-zh-streaming",
+        "streaming_mode": false
       }
     },
     "volc_stt": {
@@ -165,11 +183,11 @@
       ],
       "id": "local_stt_streaming_demo",
       "name": "本地STT中文→英文（离线）",
-      "enabled": true,
+      "enabled": false,
       "graph": {
-        "entry": "microphone_system",
+        "entry": "loopback_vrchat",
         "routes": {
-          "microphone_system": [
+          "loopback_vrchat": [
             "local_stt"
           ],
           "gui_text_pipe": [
@@ -186,6 +204,25 @@
           ],
           "local_stt": [
             "gui_text_pipe"
+          ]
+        }
+      }
+    },
+    {
+      "id": "local_stt_demo",
+      "name": "本地STT中文→英文（非流式）",
+      "enabled": true,
+      "graph": {
+        "entry": "loopback_batch",
+        "routes": {
+          "loopback_batch": [
+            "local_stt_batch"
+          ],
+          "local_stt_batch": [
+            "mt_en_baidu"
+          ],
+          "mt_en_baidu": [
+            "terminal_out"
           ]
         }
       }

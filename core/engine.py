@@ -162,6 +162,7 @@ class PipelineEngine:
             all_refs.update(to_refs)
 
         global_modules_cfg: dict = self._raw_config.get("modules", {})
+        global_queue_size = self._raw_config.get("pipeline_queue_size", 2)
 
         all_modules: dict[str, BaseModule] = {}
         for ref_id in all_refs:
@@ -174,6 +175,7 @@ class PipelineEngine:
             params = dict(mod_def.get("params", {}))
             params["_ref_id"] = ref_id
             params["pipeline_id"] = pid
+            params["_queue_size"] = global_queue_size
 
             # print(f"构建模块 pid='{pid}' ref_id='{ref_id}' type='{mod_type}'")
 
@@ -216,8 +218,10 @@ class PipelineEngine:
         src_cfg = pipeline_cfg["audio_source"]
         src_type = src_cfg["type"]
         src_params = dict(src_cfg.get("params", {}))
+        global_queue_size = self._raw_config.get("pipeline_queue_size", 2)
         src_params["_ref_id"] = "audio"
         src_params["pipeline_id"] = pid
+        src_params["_queue_size"] = global_queue_size
         if src_type not in PRODUCER_REGISTRY:
             raise ValueError(f"未知音频源类型: {src_type!r}，可用: {list(PRODUCER_REGISTRY)}")
         audio_mod: BaseModule = PRODUCER_REGISTRY[src_type](
@@ -245,6 +249,7 @@ class PipelineEngine:
             params = dict(tr_cfg.get("params", {}))
             params["_ref_id"] = ref_id
             params["pipeline_id"] = pid
+            params["_queue_size"] = global_queue_size
             if tr_type not in MODULE_REGISTRY:
                 raise ValueError(
                     f"未知翻译类型: {tr_type!r}，可用: {list(MODULE_REGISTRY)}"
@@ -263,6 +268,7 @@ class PipelineEngine:
             params["_ref_id"] = ref_id
             params["pipeline_id"] = pid
             params["pipeline_name"] = name
+            params["_queue_size"] = global_queue_size
             if con_type not in MODULE_REGISTRY:
                 raise ValueError(
                     f"未知消费类型: {con_type!r}，可用: {list(MODULE_REGISTRY)}"
