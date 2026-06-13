@@ -66,7 +66,7 @@ class BaseModule(ABC):
     所有模块的基类。
 
     框架方法（@final，不得覆盖）：
-        add_downstream, send_to_downstream, start, stop
+        send_to_downstream, start, stop
 
     生命周期钩子（可覆盖，均有空的默认实现）：
         on_start, on_before_stop, on_after_stop
@@ -75,6 +75,12 @@ class BaseModule(ABC):
         module_id:  完整命名空间 ID（如 "vrchat.volc_stt"），用于日志
         _ref_id:    config 中定义的本地引用 ID（如 "volc_stt"），
                     用作节点时间戳 key（"timestamp_volc_stt"）
+
+    共享实例说明：
+        当同一模块实例被多条 pipeline 共用时，start()/stop() 使用引用计数：
+        只有第一个 start() 真正启动线程，只有最后一个 stop() 真正停止线程。
+        包的路由完全由包自身携带（_pipeline_routes / _pipeline_modules），
+        send_to_downstream() 按包内路由寻找下一跳，保证不同 pipeline 的包不会串流。
     """
 
     def __init__(self, module_id: str, config: dict):
@@ -82,20 +88,13 @@ class BaseModule(ABC):
         self.config = config
         # 本地引用 ID：由 engine 通过 config["_ref_id"] 注入
         self._ref_id: str = config.get("_ref_id", module_id)
-        self._downstream: list[BaseModule] = []
         _queue_size = config.get("_queue_size", 2)
         self.input_queue: queue.Queue[MessagePacket | None] = queue.Queue(maxsize=_queue_size)
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-
-    # ------------------------------------------------------------------
-    # 下游管理（@final）
-    # ------------------------------------------------------------------
-
-    @final
-    def add_downstream(self, module: BaseModule) -> None:
-        """连接一个下游模块。一个模块可以有多个下游。"""
-        self._downstream.append(module)
+        # 引用计数：支持共享模块实例被多条 pipeline 使用
+        self._start_count: int = 0
+        self._start_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # 向下游广播（@final）
@@ -104,39 +103,41 @@ class BaseModule(ABC):
     @final
     def send_to_downstream(self, packet: MessagePacket) -> None:
         """
-        将包广播至所有下游模块。
+        将包按包内路由图广播至下一跳模块。
         在分发前自动为包打上本节点的时间戳（mark_node_time）。
-        若只有一个下游，直接传递原包；若有多个，每个下游获得一份克隆。
+
+        路由信息由 PacketProducerModule._run() 在发包时注入（_pipeline_routes /
+        _pipeline_modules），全链路依赖包内路由，不使用静态连线。
 
         此方法标记为 final，不允许子类重写。
         """
-        if not self._downstream:
-            return
-
         def _put_with_clear(q: queue.Queue, pkt: MessagePacket, ds_id: str) -> None:
             try:
                 q.put_nowait(pkt)
             except queue.Full:
                 logger.warning("[%s] 下游 %s 队列已满，清空旧包", self.module_id, ds_id)
-                # 清空旧包
                 while not q.empty():
                     try:
                         q.get_nowait()
                     except queue.Empty:
                         break
-                # 重新入队
                 try:
                     q.put_nowait(pkt)
                 except queue.Full:
                     pass
 
-        # 发出前打上本节点时间戳，克隆包会携带该时间戳
+        # 发出前打上本节点时间戳，克隆包携带该时间戳
         packet.mark_node_time(self._ref_id)
-        if len(self._downstream) == 1:
-            _put_with_clear(self._downstream[0].input_queue, packet, self._downstream[0].module_id)
+
+        next_refs = packet._pipeline_routes.get(self._ref_id, [])
+        if not next_refs:
+            return
+        if len(next_refs) == 1:
+            ref = next_refs[0]
+            _put_with_clear(packet._pipeline_modules[ref].input_queue, packet, ref)
         else:
-            for ds in self._downstream:
-                _put_with_clear(ds.input_queue, packet.clone(), ds.module_id)
+            for ref in next_refs:
+                _put_with_clear(packet._pipeline_modules[ref].input_queue, packet.clone(), ref)
 
     # ------------------------------------------------------------------
     # 生命周期（@final）
@@ -144,7 +145,20 @@ class BaseModule(ABC):
 
     @final
     def start(self) -> None:
-        """启动模块的后台工作线程。调用顺序：on_start → 启动线程。"""
+        """
+        启动模块的后台工作线程。调用顺序：on_start → 启动线程。
+
+        引用计数：若模块实例被多条 pipeline 共用，仅第一次调用真正启动线程，
+        后续调用只递增计数并返回。
+        """
+        with self._start_lock:
+            self._start_count += 1
+            if self._start_count > 1:
+                logger.info(
+                    "[%s] 共享实例已在运行（引用计数=%d），跳过重复启动",
+                    self.module_id, self._start_count,
+                )
+                return
         self.on_start()
         self._stop_event.clear()
         self._thread = threading.Thread(
@@ -160,7 +174,20 @@ class BaseModule(ABC):
         """
         请求模块停止并等待线程退出。
         调用顺序：on_before_stop → 设置停止信号 → 等待线程 → on_after_stop。
+
+        引用计数：若模块实例被多条 pipeline 共用，只有最后一个 stop() 才真正
+        停止线程；其余调用只递减计数并返回。
         """
+        with self._start_lock:
+            if self._start_count <= 0:
+                return
+            self._start_count -= 1
+            if self._start_count > 0:
+                logger.info(
+                    "[%s] 共享实例仍被引用（引用计数=%d），暂不停止",
+                    self.module_id, self._start_count,
+                )
+                return
         self.on_before_stop()
         self._stop_event.set()
         # 投入哨兵值让阻塞的 get() 立刻返回
@@ -244,7 +271,7 @@ class BaseModule(ABC):
 
 
 # ---------------------------------------------------------------------------
-# PacketProducerModule — 主动生产包（替代 PacketProducerModule）
+# PacketProducerModule — 主动生产包
 # ---------------------------------------------------------------------------
 
 class PacketProducerModule(BaseModule):
@@ -256,15 +283,40 @@ class PacketProducerModule(BaseModule):
         produce_packets() — 生成器，持续 yield MessagePacket
 
     子类不得覆盖 _run()（已 @final）。
+
+    set_pipeline_context(routes, modules) 由 Pipeline.build() 调用，
+    将路由图注入生产者；_run() 在每个包发出前将其写入 packet._pipeline_routes /
+    packet._pipeline_modules，确保包在整条 pipeline 内按正确路由流动。
     """
+
+    def __init__(self, module_id: str, config: dict) -> None:
+        super().__init__(module_id, config)
+        # 由 Pipeline.build() 注入，供 _run() 写入每个产出的包
+        self._pipeline_routes: dict[str, list[str]] = {}
+        self._pipeline_modules: dict[str, Any] = {}
+
+    def set_pipeline_context(
+        self,
+        routes: dict[str, list[str]],
+        modules: dict[str, Any],
+    ) -> None:
+        """
+        由 Pipeline.build() 调用，注入本 pipeline 的路由图与模块字典。
+        _run() 会将这两个引用写入每个产出的包，驱动包的全链路路由。
+        """
+        self._pipeline_routes = routes
+        self._pipeline_modules = modules
 
     @final
     def _run(self) -> None:
-        """直接迭代 produce_packets()，将每个包广播给下游。"""
+        """直接迭代 produce_packets()，注入路由上下文后广播给下游。"""
         try:
             for packet in self.produce_packets():
                 if self._stop_event.is_set():
                     break
+                # 将本 pipeline 的路由图注入包（浅引用，零复制）
+                packet._pipeline_routes = self._pipeline_routes
+                packet._pipeline_modules = self._pipeline_modules
                 self.send_to_downstream(packet)
         except Exception:
             logger.exception("[%s] 产包出错", self.module_id)

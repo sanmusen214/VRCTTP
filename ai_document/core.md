@@ -24,7 +24,12 @@ class MessagePacket:
     created_at: datetime      # 创建时间（UTC）
     data: dict[str, Any]      # 所有业务数据以 key-value 存储
     is_partial: bool          # property，读写均操作 data["is_partial"]
+    # 路由上下文（PacketProducerModule 注入，clone 时浅复制）
+    _pipeline_routes: dict[str, list[str]]  # ref_id → [next_ref_id, ...]
+    _pipeline_modules: dict[str, BaseModule] # ref_id → 模块实例
 ```
+
+`_pipeline_routes` 和 `_pipeline_modules` 由生产者模块在 `_run()` 中写入，携带本条 pipeline 的完整路由图。`send_to_downstream()` 优先使用这两个字段实现动态寻路，不再依赖静态的 `_downstream` 列表。
 
 ### 标准 Key 常量
 
@@ -72,6 +77,7 @@ packet.mark_node_time("volc_stt")
 
 单下游：直接传递原包引用（无克隆，零分配）。
 多下游：每个下游获得独立深拷贝，UUID 重新生成，`data` 深拷贝（含 `is_partial`、时间戳等所有字段）。
+`_pipeline_routes` / `_pipeline_modules` 两个路由字段**浅复制（共享引用）**，分叉后的所有包仍遵循相同路由图。
 
 ---
 
@@ -91,10 +97,9 @@ BaseModule
 
 | 方法 | 说明 |
 |------|------|
-| `add_downstream(module)` | 添加一个下游模块 |
-| `send_to_downstream(packet)` | 打时间戳后广播至所有下游 |
-| `start()` | `on_start()` → 启动后台线程 |
-| `stop()` | `on_before_stop()` → 置位 stop_event → 投入 None 哨兵 → join → `on_after_stop()` |
+| `send_to_downstream(packet)` | 打时间戳后按包内路由分发至下一跳 |
+| `start()` | `on_start()` → 启动后台线程（引用计数） |
+| `stop()` | `on_before_stop()` → 置位 stop_event → 投入 None 哨兵 → join → `on_after_stop()`（引用计数） |
 
 **生命周期钩子（子类可覆盖，默认空实现）：**
 
@@ -119,12 +124,20 @@ BaseModule
 @final def _run(self):
     for packet in self.produce_packets():
         if self._stop_event.is_set(): break
+        # 将本 pipeline 的路由图注入包（浅引用）
+        packet._pipeline_routes = self._pipeline_routes
+        packet._pipeline_modules = self._pipeline_modules
         self.send_to_downstream(packet)
 
+def set_pipeline_context(routes, modules): ...  # 由 Pipeline.build() 调用
 @abstractmethod def produce_packets(self): ...  # 生成器
 ```
 
 子类只需实现 `produce_packets()`，当 `_stop_event` 被置位时应尽快退出生成器。
+
+`Pipeline.build()` 调用 `set_pipeline_context(routes, all_modules)` 将路由图注入生产者；
+`_run()` 在每个包发出前将两个引用写入 `packet._pipeline_routes` / `packet._pipeline_modules`，
+确保包在整条 pipeline 内按正确路由流动（包内路由 > `_downstream` 列表）。
 
 ### PacketConsumerModule
 
@@ -175,15 +188,54 @@ class Pipeline:
 
 | 方法 | 说明 |
 |------|------|
-| `build()` | 按 routes 邻接表调用 `add_downstream()` 连线，只执行一次 |
+| `build()` | 校验路由图，调用 `entry.set_pipeline_context(routes, all_modules)` 注入路由上下文，只执行一次。**不再调用 `add_downstream()`**，路由改由包携带。 |
 | `start()` | 按拓扑序（DFS 后序翻转）逐模块调用 `module.start()` |
 | `stop()` | 按反拓扑序（先停叶节点）逐模块调用 `module.stop()` |
 | `audio_source` | property，返回 entry 节点（`PacketProducerModule`） |
 | `translation_chain` | property，返回所有 `PacketConsumerModule` 列表（顺序不定） |
 
+### 包驱动路由（Packet-Driven Routing）
+
+包在 `PacketProducerModule._run()` 中被打上本 pipeline 的路由信息：
+
+```python
+packet._pipeline_routes  # dict[str, list[str]]  路由邻接表
+packet._pipeline_modules # dict[str, BaseModule]  ref_id → 实例
+```
+
+`BaseModule.send_to_downstream(packet)` 的路由优先级：
+1. **包内路由**（`packet._pipeline_routes` 含本模块 `_ref_id`）：按路由图找下一跳，直接入队。
+2. **遗留降级**（包无路由信息）：使用 `_downstream` 列表（向后兼容 legacy pipeline 格式）。
+
+`clone()` 对 `_pipeline_routes` / `_pipeline_modules` 做**浅复制（共享引用）**，
+分叉后的所有包仍遵循同一路由图，零额外开销。
+
 ---
 
 ## engine.py — PipelineEngine
+
+### 全局模块实例缓存（DAG 格式专用）
+
+`PipelineEngine` 维护 `_global_module_cache: dict[str, BaseModule]`（按 `ref_id` 缓存）。
+
+在 `_build_dag_pipeline()` 中：
+- **音频源**（`PacketProducerModule`）：每条 pipeline 独立实例化（持有各自的路由上下文），**不进缓存**。
+- **消费/翻译模块**（`PacketConsumerModule`）：首次创建后存入缓存；后续 pipeline 引用相同 `ref_id` 时直接复用已有实例。
+
+重型模块（如 `LocalParaformerSTT`）的模型权重只加载一次，所有 pipeline 共享同一实例。包通过内嵌路由信息各自流向正确的下游，实例内部按 `pipeline_id` 隔离流式状态，彼此不串流。
+
+`reload_config()` 会先调用 `_global_module_cache.clear()` 再重建，确保热重载后重新创建实例。
+
+### 共享实例生命周期（引用计数）
+
+`BaseModule.start()` / `stop()` 内置引用计数（`_start_count`，线程安全）：
+
+| 调用 | 行为 |
+|------|------|
+| `start()`，`_start_count` 0→1 | 真正启动线程，调用 `on_start()` |
+| `start()`，`_start_count` 1→N | 仅递增计数，直接返回（线程已在运行） |
+| `stop()`，`_start_count` N→1 | 仅递减计数，直接返回（其他 pipeline 仍在用） |
+| `stop()`，`_start_count` 1→0 | 真正停止线程，调用 `on_before_stop()` / `on_after_stop()` |
 
 ### 模块注册表
 

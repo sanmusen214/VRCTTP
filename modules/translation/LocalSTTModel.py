@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import numpy as np
@@ -63,6 +64,15 @@ from core.module import ParamType
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _StreamState:
+    """单条 pipeline 的流式识别运行时状态（每个语音段重置）。"""
+    cache: dict = field(default_factory=dict)
+    audio_buffer: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float32))
+    segment_source_packet: Optional[Any] = None
+    accumulated_text: str = ""
 
 
 class LocalParaformerSTT(BasePacketConsumerModule):
@@ -111,11 +121,9 @@ class LocalParaformerSTT(BasePacketConsumerModule):
         self._model: Optional[Any] = None
         self._model_lock = threading.Lock()
 
-        # 流式模式运行时状态（每个语音段重置）
-        self._cache: dict = {}
-        self._audio_buffer: np.ndarray = np.array([], dtype=np.float32)
-        self._segment_source_packet: Optional[MessagePacket] = None
-        self._accumulated_text: str = ""  # 本段语音迄今所有 chunk 的识别文字拼接结果
+        # 流式模式运行时状态（每条 pipeline 独立，key = pipeline_id）
+        # 当多条 pipeline 共用同一实例时，各自的语音段状态互不干扰
+        self._stream_states: dict[str, _StreamState] = {}
 
     # ── 生命周期钩子 ────────────────────────────────────────────────────────
 
@@ -148,10 +156,7 @@ class LocalParaformerSTT(BasePacketConsumerModule):
 
     def on_after_stop(self) -> None:
         """停止后清理运行时状态。"""
-        self._cache = {}
-        self._audio_buffer = np.array([], dtype=np.float32)
-        self._segment_source_packet = None
-        self._accumulated_text = ""
+        self._stream_states.clear()
 
     # ── 核心处理 ─────────────────────────────────────────────────────────────
 
@@ -175,6 +180,8 @@ class LocalParaformerSTT(BasePacketConsumerModule):
 
         audio = self._pcm_to_float32(pcm)
         text = self._infer_full(audio)
+        # 把单独的 . 替换成空
+        text = text.replace(".", "")
         if not text or not text.strip():
             return []
 
@@ -226,51 +233,59 @@ class LocalParaformerSTT(BasePacketConsumerModule):
           buffer 够一帧则推理，emit partial via send_to_downstream
         - is_final_segment=True → 推理剩余 buffer（is_final=True），
           返回 final 包列表
+
+        各 pipeline 的状态通过 pipeline_id 隔离，共用实例时互不干扰。
         """
+        pipeline_id = packet.pipeline_id
+        state = self._get_stream_state(pipeline_id)
+
         is_speech_start = packet.get(KEY_IS_SPEECH_START, False)
         is_partial = packet.is_partial
         is_final = packet.get(KEY_IS_FINAL_SEGMENT, False)
         pcm = packet.get(KEY_AUDIO_DATA, b"")
 
-        # 新语音段开始，重置状态
+        # 新语音段开始，重置该 pipeline 的状态
         if is_speech_start:
-            self._reset_stream_state(packet)
+            self._reset_stream_state(pipeline_id, packet)
+            state = self._get_stream_state(pipeline_id)
 
         # 记录最新源包（用于 clone）
-        if self._segment_source_packet is None:
-            self._segment_source_packet = packet
+        if state.segment_source_packet is None:
+            state.segment_source_packet = packet
 
         # 追加音频数据到缓冲区
         if pcm:
             chunk_f32 = self._pcm_to_float32(pcm)
-            self._audio_buffer = np.concatenate([self._audio_buffer, chunk_f32])
+            state.audio_buffer = np.concatenate([state.audio_buffer, chunk_f32])
 
         # 中间帧：按模型窗口大小推理，拼接增量文字后 emit partial
         if is_partial and not is_final:
-            while len(self._audio_buffer) >= self._chunk_stride:
-                window = self._audio_buffer[: self._chunk_stride]
-                self._audio_buffer = self._audio_buffer[self._chunk_stride:]
-                new_text = self._infer_chunk(window, is_final_chunk=False)
+            while len(state.audio_buffer) >= self._chunk_stride:
+                window = state.audio_buffer[: self._chunk_stride]
+                state.audio_buffer = state.audio_buffer[self._chunk_stride:]
+                new_text = self._infer_chunk(state, window, is_final_chunk=False)
                 if new_text and new_text.strip():
-                    # 拼接增量：_accumulated_text 始终是本段语音完整累积结果
-                    self._accumulated_text += new_text.strip()
-                    self._emit_partial(packet, self._accumulated_text)
+                    state.accumulated_text += new_text.strip()
+                    self._emit_partial(packet, state.accumulated_text)
             return []
 
         # 最终帧：推理剩余 buffer（is_final=True），拼接后发出完整 final 包
         if is_final:
-            remaining = self._audio_buffer
-            self._audio_buffer = np.array([], dtype=np.float32)
+            remaining = state.audio_buffer
+            state.audio_buffer = np.array([], dtype=np.float32)
             new_text = self._infer_chunk(
+                state,
                 remaining if len(remaining) > 0 else np.zeros(960, dtype=np.float32),
                 is_final_chunk=True,
             )
             if new_text and new_text.strip():
-                self._accumulated_text += new_text.strip()
-            final_text = self._accumulated_text
+                state.accumulated_text += new_text.strip()
+            final_text = state.accumulated_text
+            # 把单独的 . 替换成空
+            final_text = final_text.replace(".", "")
 
-            src = self._segment_source_packet or packet
-            self._reset_stream_state(None)
+            src = state.segment_source_packet or packet
+            self._reset_stream_state(pipeline_id, None)
 
             if not final_text:
                 return []
@@ -280,18 +295,18 @@ class LocalParaformerSTT(BasePacketConsumerModule):
             out.set(KEY_IS_PARTIAL, False)
             out.set(KEY_IS_FINAL_SEGMENT, True)
             out.set(KEY_TEXT_ORIGINAL, final_text)
-            logger.info("[%s] 流式最终识别: %s", self.module_id, final_text)
+            logger.info("[%s] 流式最终识别 pipeline=%s: %s", self.module_id, pipeline_id, final_text)
             return [out]
 
         return []
 
-    def _infer_chunk(self, audio: np.ndarray, is_final_chunk: bool) -> str:
-        """推理单个 chunk，更新内部 cache，返回识别文字。"""
+    def _infer_chunk(self, state: _StreamState, audio: np.ndarray, is_final_chunk: bool) -> str:
+        """推理单个 chunk，更新 state.cache，返回识别文字。"""
         with self._model_lock:
             try:
                 res = self._model.generate(
                     input=audio,
-                    cache=self._cache,
+                    cache=state.cache,
                     is_final=is_final_chunk,
                     chunk_size=self._chunk_size,
                     encoder_chunk_look_back=self._encoder_chunk_look_back,
@@ -313,6 +328,18 @@ class LocalParaformerSTT(BasePacketConsumerModule):
 
     # ── 工具方法 ─────────────────────────────────────────────────────────────
 
+    def _get_stream_state(self, pipeline_id: str) -> _StreamState:
+        """获取指定 pipeline 的流式状态，不存在则创建。"""
+        if pipeline_id not in self._stream_states:
+            self._stream_states[pipeline_id] = _StreamState()
+        return self._stream_states[pipeline_id]
+
+    def _reset_stream_state(self, pipeline_id: str, source_packet: Optional[MessagePacket]) -> None:
+        """重置指定 pipeline 的流式状态（每段语音开始时调用）。"""
+        self._stream_states[pipeline_id] = _StreamState(
+            segment_source_packet=source_packet,
+        )
+
     @staticmethod
     def _pcm_to_float32(pcm: bytes) -> np.ndarray:
         """将 16-bit PCM bytes 转换为 float32 numpy 数组（归一化到 [-1, 1]）。"""
@@ -324,10 +351,3 @@ class LocalParaformerSTT(BasePacketConsumerModule):
         if not res:
             return ""
         return res[0].get("text", "") if isinstance(res[0], dict) else ""
-
-    def _reset_stream_state(self, source_packet: Optional[MessagePacket]) -> None:
-        """重置流式模式的 per-segment 状态（每段语音开始时调用）。"""
-        self._cache = {}
-        self._audio_buffer = np.array([], dtype=np.float32)
-        self._segment_source_packet = source_packet
-        self._accumulated_text = ""  # 每段语音独立拼接，段间不跨越

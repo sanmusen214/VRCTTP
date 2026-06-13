@@ -96,6 +96,9 @@ class PipelineEngine:
         self.config_path = config_path
         self._pipelines: dict[str, Pipeline] = {}
         self._raw_config: dict = {}
+        # 全局模块实例缓存（仅 DAG 格式）：ref_id → 模块实例
+        # 同一 ref_id 在多条 pipeline 中共用同一实例，避免重型模型重复加载
+        self._global_module_cache: dict[str, BaseModule] = {}
         # GUI 可订阅此回调获取实时消息（pipeline_id, text_original, text_translated）
         self.on_translation: list[Any] = []
 
@@ -150,6 +153,11 @@ class PipelineEngine:
         """
         新格式：所有模块（音频源、翻译、消费者）均在全局 modules 字典中定义，
         pipeline 仅通过 graph.entry + graph.routes 描述连接拓扑。
+
+        全局模块缓存：DAG 格式下，每个 ref_id 在所有 pipeline 中共用同一实例。
+        重型模块（如本地 STT 模型）只加载一次，由引用计数控制生命周期。
+        音频源（PacketProducerModule）每条 pipeline 仍独立实例化（因其携带
+        pipeline 专属的路由上下文），不使用共享缓存。
         """
         graph_cfg = pipeline_cfg["graph"]
         entry: str = graph_cfg["entry"]
@@ -172,29 +180,47 @@ class PipelineEngine:
                 )
             mod_def = global_modules_cfg[ref_id]
             mod_type = mod_def["type"]
-            params = dict(mod_def.get("params", {}))
-            params["_ref_id"] = ref_id
-            params["pipeline_id"] = pid
-            params["_queue_size"] = global_queue_size
 
-            # print(f"构建模块 pid='{pid}' ref_id='{ref_id}' type='{mod_type}'")
-
+            # 音频源（PacketProducerModule）每条 pipeline 独立实例化，
+            # 因为它持有 pipeline 专属的路由上下文，不能跨 pipeline 共享。
             if mod_type in PRODUCER_REGISTRY:
+                params = dict(mod_def.get("params", {}))
+                params["_ref_id"] = ref_id
+                params["pipeline_id"] = pid
+                params["_queue_size"] = global_queue_size
                 module: BaseModule = PRODUCER_REGISTRY[mod_type](
                     module_id=f"{pid}.{ref_id}", config=params
                 )
-            elif mod_type in MODULE_REGISTRY:
-                params["pipeline_name"] = name
-                module = MODULE_REGISTRY[mod_type](
-                    module_id=f"{pid}.{ref_id}", config=params
+                all_modules[ref_id] = module
+                continue
+
+            # 消费/翻译模块：从全局缓存复用，避免重型模型重复加载
+            if ref_id in self._global_module_cache:
+                cached = self._global_module_cache[ref_id]
+                all_modules[ref_id] = cached
+                logger.info(
+                    "Pipeline [%s] 复用已缓存模块 ref_id='%s' (%s)",
+                    pid, ref_id, type(cached).__name__,
                 )
+                continue
+
+            if mod_type in MODULE_REGISTRY:
+                params = dict(mod_def.get("params", {}))
+                params["_ref_id"] = ref_id
+                params["pipeline_id"] = pid
+                params["pipeline_name"] = name
+                params["_queue_size"] = global_queue_size
+                module = MODULE_REGISTRY[mod_type](
+                    module_id=ref_id, config=params
+                )
+                self._global_module_cache[ref_id] = module
+                all_modules[ref_id] = module
             else:
                 raise ValueError(
                     f"未知模块类型: {mod_type!r}（ref_id='{ref_id}'）。"
                     f" 可用生产者: {list(PRODUCER_REGISTRY)}"
                     f" 可用消费/翻译: {list(MODULE_REGISTRY)}"
                 )
-            all_modules[ref_id] = module
 
         return Pipeline(
             pipeline_id=pid,
@@ -353,6 +379,7 @@ class PipelineEngine:
         """
         logger.info("开始热重载配置...")
         self.stop_all()
+        self._global_module_cache.clear()  # 清空共享模块缓存，确保重载后重新创建实例
         self.load_config()
         self.build_all()
         self.start_all()

@@ -56,12 +56,19 @@ class MessagePacket:
         created_at: 包的创建时间（UTC）
         data: 模块间传递的键值对数据
         is_partial: 是否为流式中间结果（partial 包通常不触发最终消费）
+        _pipeline_routes: 所属 pipeline 的路由图（ref_id → [next_ref_id, ...]），
+            由 PacketProducerModule 注入，clone() 时浅复制（共享引用）。
+        _pipeline_modules: 所属 pipeline 的模块实例字典（ref_id → BaseModule），
+            由 PacketProducerModule 注入，clone() 时浅复制（共享引用）。
     """
 
     pipeline_id: str
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     data: dict[str, Any] = field(default_factory=dict)
+    # 路由上下文：由生产者注入，clone 时以引用共享（不深拷贝）
+    _pipeline_routes: dict[str, list[str]] = field(default_factory=dict)
+    _pipeline_modules: dict[str, Any] = field(default_factory=dict)  # ref_id → BaseModule
 
     def __post_init__(self) -> None:
         # 确保 is_partial 始终存在于 data 中，property 由此唯一读写
@@ -106,12 +113,17 @@ class MessagePacket:
         """
         创建当前包的深度副本，使用新的 UUID。
         用于将同一包广播给多个下游模块时，各自持有独立副本。
+
+        _pipeline_routes 和 _pipeline_modules 以引用共享（不深拷贝），
+        确保同一 pipeline 内所有分叉包遵循相同路由图。
         """
         new_packet = MessagePacket(
             pipeline_id=self.pipeline_id,
             id=str(uuid.uuid4()),
             created_at=self.created_at,
             data=copy.deepcopy(self.data),
+            _pipeline_routes=self._pipeline_routes,   # 共享引用，不深拷贝
+            _pipeline_modules=self._pipeline_modules, # 共享引用，不深拷贝
         )
         return new_packet
 

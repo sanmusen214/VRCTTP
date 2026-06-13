@@ -93,27 +93,36 @@ class Pipeline:
     # ------------------------------------------------------------------
 
     def build(self) -> None:
-        """按 routes 邻接表连线所有模块（含音频源）。"""
+        """
+        校验路由图并将路由上下文注入入口（生产者）模块。
+
+        不再通过 add_downstream() 硬连线模块：路由信息由入口模块注入到它产出的每个包中，
+        消费模块通过包内的 _pipeline_routes / _pipeline_modules 进行动态寻路，
+        从而支持多条 pipeline 共用同一模块实例而包不串流。
+        """
         if self._wired:
             return
 
+        # 校验所有路由引用的 ref_id 均已在 all_modules 中定义
         for from_ref, to_refs in self.routes.items():
-            from_module = self.all_modules.get(from_ref)
-            if from_module is None:
+            if from_ref not in self.all_modules:
                 raise ValueError(
                     f"Pipeline [{self.pipeline_id}] routes 中 '{from_ref}' 未在 all_modules 中定义"
                 )
             for to_ref in to_refs:
-                to_module = self.all_modules.get(to_ref)
-                if to_module is None:
+                if to_ref not in self.all_modules:
                     raise ValueError(
                         f"Pipeline [{self.pipeline_id}] routes 中 '{to_ref}' 未在 all_modules 中定义"
                     )
-                from_module.add_downstream(to_module)
+
+        # 将本 pipeline 的路由图注入入口（PacketProducerModule）
+        entry_module = self.all_modules[self.entry]
+        if hasattr(entry_module, "set_pipeline_context"):
+            entry_module.set_pipeline_context(self.routes, self.all_modules)
 
         self._wired = True
         logger.debug(
-            "Pipeline [%s] 已连线 entry=%s routes=%s",
+            "Pipeline [%s] 已构建路由上下文 entry=%s routes=%s",
             self.pipeline_id,
             self.entry,
             self.routes,
