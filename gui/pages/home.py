@@ -38,6 +38,13 @@ def register(app) -> None:  # noqa: ARG001
                     elif init_status == "error":
                         with ui.card().classes("w-full bg-red-1 q-pa-sm"):
                             ui.label(f"❌ Pipeline 初始化失败：{init_error}").classes("text-negative")
+                    elif init_status == "ready":
+                        # 模型目录缺失检测（仅初始化完成后才检查）
+                        missing = engine.get_missing_model_warnings()
+                        for msg in missing:
+                            with ui.card().classes("w-full bg-red-1 q-pa-sm"):
+                                ui.icon("warning", color="negative").classes("q-mr-sm")
+                                ui.label(f"⚠ 本地语音识别模型缺失：{msg}").classes("text-negative")
 
                 # ── 管道列表 ─────────────────────────────────────────
                 status_col.clear()

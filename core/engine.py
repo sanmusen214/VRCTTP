@@ -385,6 +385,44 @@ class PipelineEngine:
         self.start_all()
         logger.info("热重载完成")
 
+    def get_missing_model_warnings(self) -> list[str]:
+        """
+        扫描配置中所有启用 pipeline 使用的 local_stt 模块，
+        检查其 model_path 目录是否存在。
+
+        返回缺失模型的警告信息列表（空列表表示全部正常）。
+        供 GUI 首页显示红色提示框。
+        """
+        warnings_list: list[str] = []
+        modules_cfg: dict = self._raw_config.get("modules", {})
+        enabled_pipeline_refs: set[str] = set()
+
+        for pcfg in self._raw_config.get("pipelines", []):
+            if not isinstance(pcfg, dict) or not pcfg.get("enabled", False):
+                continue
+            graph = pcfg.get("graph", {})
+            for refs in graph.get("routes", {}).values():
+                enabled_pipeline_refs.update(refs)
+            entry = graph.get("entry")
+            if entry:
+                enabled_pipeline_refs.add(entry)
+
+        for ref_id in enabled_pipeline_refs:
+            mod_def = modules_cfg.get(ref_id)
+            if not mod_def or mod_def.get("type") != "local_stt":
+                continue
+            model_path = mod_def.get("params", {}).get("model_path", "")
+            if not model_path:
+                warnings_list.append(
+                    f"模块「{ref_id}」未配置 model_path，请在「模块目录」页中填写本地模型路径。"
+                )
+            elif not os.path.isdir(model_path):
+                warnings_list.append(
+                    f"模块「{ref_id}」的模型目录不存在：{model_path}\n"
+                    f"请下载对应的 FunASR 模型并解压到该目录，然后重启程序。"
+                )
+        return warnings_list
+
     # ------------------------------------------------------------------
     # 状态查询（供 GUI 使用）
     # ------------------------------------------------------------------

@@ -30,3 +30,6 @@ coverage
 *.tmp
 *.swp
 *.bak
+
+# 不忽略 main.spec
+!main.spec

@@ -156,6 +156,15 @@
       "params": {
         "source_lang": "auto"
       }
+    },
+    "翻译到中文-百度翻译API": {
+      "type": "baidu_machine_translation",
+      "params": {
+        "app_id": "${BAIDU_APP_ID}",
+        "app_key": "${BAIDU_APP_KEY}",
+        "source_language": "auto",
+        "target_language": "zh"
+      }
     }
   },
   "pipelines": [
@@ -202,6 +211,29 @@
             "翻译到英文-百度翻译API"
           ],
           "翻译到英文-百度翻译API": [
+            "软件日志输出",
+            "VRChat输出"
+          ]
+        }
+      }
+    },
+    {
+      "id": "mic_audio_to_chinese",
+      "name": "游戏音频英文到中文（分句-本地识别-百度翻译）",
+      "enabled": false,
+      "graph": {
+        "entry": "分句音频",
+        "routes": {
+          "分句音频": [
+            "分句识别-本地"
+          ],
+          "分句识别-本地": [
+            "中间件-GUI输入文字"
+          ],
+          "中间件-GUI输入文字": [
+            "翻译到中文-百度翻译API"
+          ],
+          "翻译到中文-百度翻译API": [
             "软件日志输出",
             "VRChat输出"
           ]
