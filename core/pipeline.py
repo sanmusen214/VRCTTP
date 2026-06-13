@@ -115,10 +115,11 @@ class Pipeline:
                         f"Pipeline [{self.pipeline_id}] routes 中 '{to_ref}' 未在 all_modules 中定义"
                     )
 
-        # 将本 pipeline 的路由图注入入口（PacketProducerModule）
-        entry_module = self.all_modules[self.entry]
-        if hasattr(entry_module, "set_pipeline_context"):
-            entry_module.set_pipeline_context(self.routes, self.all_modules)
+        # 将本 pipeline 的路由图注入所有 PacketProducerModule 节点
+        # （入口龙头及内嵌在 DAG 中的中间生产者，如 TextInput）
+        for ref_id, module in self.all_modules.items():
+            if hasattr(module, "set_pipeline_context"):
+                module.set_pipeline_context(self.routes, self.all_modules)
 
         self._wired = True
         logger.debug(

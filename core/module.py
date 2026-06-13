@@ -309,14 +309,20 @@ class PacketProducerModule(BaseModule):
 
     @final
     def _run(self) -> None:
-        """直接迭代 produce_packets()，注入路由上下文后广播给下游。"""
+        """直接迭代 produce_packets()，注入路由上下文后广播给下游。
+
+        路由注入规则：
+        - 包已有路由信息（转发自上游的包）：保持原有路由不覆盖。
+        - 包无路由信息（本模块新建的包）：写入本 pipeline 路由。
+        """
         try:
             for packet in self.produce_packets():
                 if self._stop_event.is_set():
                     break
-                # 将本 pipeline 的路由图注入包（浅引用，零复制）
-                packet._pipeline_routes = self._pipeline_routes
-                packet._pipeline_modules = self._pipeline_modules
+                # 仅对新建包注入路由；转发自上游的包已携带正确路由，不覆盖
+                if not packet._pipeline_routes:
+                    packet._pipeline_routes = self._pipeline_routes
+                    packet._pipeline_modules = self._pipeline_modules
                 self.send_to_downstream(packet)
         except Exception:
             logger.exception("[%s] 产包出错", self.module_id)

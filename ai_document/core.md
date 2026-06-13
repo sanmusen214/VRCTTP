@@ -124,20 +124,24 @@ BaseModule
 @final def _run(self):
     for packet in self.produce_packets():
         if self._stop_event.is_set(): break
-        # 将本 pipeline 的路由图注入包（浅引用）
-        packet._pipeline_routes = self._pipeline_routes
-        packet._pipeline_modules = self._pipeline_modules
+        # 仅对新建包注入路由；转发包已携带正确路由，不覆盖
+        if not packet._pipeline_routes:
+            packet._pipeline_routes = self._pipeline_routes
+            packet._pipeline_modules = self._pipeline_modules
         self.send_to_downstream(packet)
 
-def set_pipeline_context(routes, modules): ...  # 由 Pipeline.build() 调用
+def set_pipeline_context(routes, modules): ...  # 由 Pipeline.build() 对所有生产者调用
 @abstractmethod def produce_packets(self): ...  # 生成器
 ```
 
 子类只需实现 `produce_packets()`，当 `_stop_event` 被置位时应尽快退出生成器。
 
-`Pipeline.build()` 调用 `set_pipeline_context(routes, all_modules)` 将路由图注入生产者；
-`_run()` 在每个包发出前将两个引用写入 `packet._pipeline_routes` / `packet._pipeline_modules`，
-确保包在整条 pipeline 内按正确路由流动（包内路由 > `_downstream` 列表）。
+`Pipeline.build()` 对 `all_modules` 中所有具有 `set_pipeline_context` 的模块（即所有 `PacketProducerModule`）都调用该方法，
+注入本 pipeline 的完整路由图。这包括入口音频源和 DAG 中间的所有生产者节点（如 `TextInput`）。
+
+`_run()` 对包的路由注入规则：
+- **包已有路由信息**（转发自上游的包）：保持原有路由不覆盖，继续沿原 pipeline 路由流动。
+- **包无路由信息**（本模块新建的包）：写入本 pipeline 路由。
 
 ### PacketConsumerModule
 
@@ -188,7 +192,7 @@ class Pipeline:
 
 | 方法 | 说明 |
 |------|------|
-| `build()` | 校验路由图，调用 `entry.set_pipeline_context(routes, all_modules)` 注入路由上下文，只执行一次。**不再调用 `add_downstream()`**，路由改由包携带。 |
+| `build()` | 校验路由图，对 `all_modules` 中**所有** `PacketProducerModule`（入口及中间生产者如 `TextInput`）调用 `set_pipeline_context(routes, all_modules)` 注入路由上下文，只执行一次。**不调用 `add_downstream()`**，路由由包携带。 |
 | `start()` | 按拓扑序（DFS 后序翻转）逐模块调用 `module.start()` |
 | `stop()` | 按反拓扑序（先停叶节点）逐模块调用 `module.stop()` |
 | `audio_source` | property，返回 entry 节点（`PacketProducerModule`） |
@@ -203,12 +207,15 @@ packet._pipeline_routes  # dict[str, list[str]]  路由邻接表
 packet._pipeline_modules # dict[str, BaseModule]  ref_id → 实例
 ```
 
-`BaseModule.send_to_downstream(packet)` 的路由优先级：
-1. **包内路由**（`packet._pipeline_routes` 含本模块 `_ref_id`）：按路由图找下一跳，直接入队。
-2. **遗留降级**（包无路由信息）：使用 `_downstream` 列表（向后兼容 legacy pipeline 格式）。
+`BaseModule.send_to_downstream(packet)` 直接按 `packet._pipeline_routes.get(self._ref_id)` 寻找下一跳入队，无任何静态连线。
 
 `clone()` 对 `_pipeline_routes` / `_pipeline_modules` 做**浅复制（共享引用）**，
 分叉后的所有包仍遵循同一路由图，零额外开销。
+
+**中间生产者节点**（如 `TextInput` 接在 DAG 中间）同样是 `PacketProducerModule`，`build()` 会对其注入路由。
+它 yield 的两类包处理方式不同：
+- **新建包**（GUI 文字输入）：`_pipeline_routes` 为空，`_run()` 写入本 pipeline 路由。
+- **转发包**（上游透传）：已携带正确路由，`_run()` 不覆盖，继续沿原路由流动。
 
 ---
 
