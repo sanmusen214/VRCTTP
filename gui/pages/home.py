@@ -22,9 +22,24 @@ def register(app) -> None:  # noqa: ARG001
         with ui.column().classes("w-full max-w-4xl mx-auto q-pa-md gap-4"):
             ui.label("管道状态").classes("text-h5")
 
+            init_banner = ui.column().classes("w-full")
             status_col = ui.column().classes("w-full gap-2")
 
             async def refresh() -> None:
+                # ── 引擎初始化状态横幅 ──────────────────────────────
+                init_banner.clear()
+                init_status, init_error = state.get_engine_init_status()
+                with init_banner:
+                    if init_status == "initializing":
+                        with ui.card().classes("w-full bg-blue-1 q-pa-sm"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.spinner(size="sm", color="blue")
+                                ui.label("Pipeline 正在后台初始化，本地模型加载中，请稍候...").classes("text-blue-8")
+                    elif init_status == "error":
+                        with ui.card().classes("w-full bg-red-1 q-pa-sm"):
+                            ui.label(f"❌ Pipeline 初始化失败：{init_error}").classes("text-negative")
+
+                # ── 管道列表 ─────────────────────────────────────────
                 status_col.clear()
                 statuses = engine.get_status()
                 raw = engine.get_raw_config()

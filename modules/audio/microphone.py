@@ -47,7 +47,7 @@ class MicrophoneSource(VADPacketProducerModule):
     @classmethod
     def get_config_attributes(cls) -> list[dict]:
         return [
-            {"name": "device_name",        "type": ParamType.String,   "default": None,        "required": False, "description": "麦克风设备名，null 使用系统默认", "selectable": None},
+            {"name": "device_name",        "type": ParamType.String,   "default": None,        "required": False, "description": "麦克风设备名，null 使用系统默认", "selectable": None, "options_loader": "microphone"},
             {"name": "sample_rate",        "type": ParamType.Int,      "default": 16000,       "required": False, "description": "采样率（Hz）", "selectable": None, "min": 8000, "max": 48000},
             {"name": "vad_mode",           "type": ParamType.Int,      "default": 2,           "required": False, "description": "VAD 灵敏度 0-3（3 最灵敏）", "selectable": None, "min": 0, "max": 3},
             {"name": "mode",               "type": ParamType.Select,   "default": "streaming", "required": False, "description": "工作模式", "selectable": ["batch", "streaming"]},

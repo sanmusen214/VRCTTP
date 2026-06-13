@@ -124,8 +124,7 @@ def register(app) -> None:  # noqa: ARG001
                                                 if rid in r.get("modules", {}):
                                                     r["modules"][rid]["params"] = new_params
                                                     engine.save_config(r)
-                                                    engine.reload_config()
-                                                    ui.notify(f"已保存 {rid!r} 的参数并重载", type="positive")
+                                                    ui.notify(f"已保存 {rid!r} 的参数（需点击「重载所有配置」生效）", type="positive")
                                                 edit_dlg.close()
                                                 draw_instances()
                                             with ui.row():
@@ -149,8 +148,7 @@ def register(app) -> None:  # noqa: ARG001
                 raw = engine.get_raw_config()
                 raw.get("modules", {}).pop(ref_id, None)
                 engine.save_config(raw)
-                engine.reload_config()
-                ui.notify(f"已删除模块实例 {ref_id!r} 并重载", type="positive")
+                ui.notify(f"已删除模块实例 {ref_id!r}（需点击「重载所有配置」生效）", type="positive")
                 draw_instances()
 
             draw_instances()

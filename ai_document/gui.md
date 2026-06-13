@@ -32,9 +32,14 @@ gui/
 
 ```
 main.py
-  ↓ gui.create_app(engine)   ← 初始化状态，注册所有路由
-  ↓ ui.run(...)              ← 启动 NiceGUI HTTP 服务
+  ↓ engine.load_config()          ← 快速（仅解析 JSON）
+  ↓ gui.create_app(engine)         ← 初始化状态，注册所有路由
+  ↓ ui.run(show=True)              ← 启动 NiceGUI HTTP 服务，自动开启浏览器
+  ↓ 后台线程: engine.build_all() + engine.start_all()
+                                 ← 耐时操作（本地模型加载等）不阻塞 GUI
 ```
+
+GUI 在引擎初始化前就可用。首页会显示初始化状态横幅，待后台线程完成后自动消失。
 
 `main.py` 中 `ui.run()` 必须传入 `storage_secret`，否则 `app.storage.user`（深色模式持久化）不可用：
 
@@ -56,17 +61,22 @@ ui.run(
 ## gui/state.py — 全局状态
 
 | 名称 | 类型 | 说明 |
-|------|------|------|
+|------|------|—---|
 | `_engine` | `PipelineEngine \| None` | 全局唯一引擎实例，由 `init()` 设置 |
 | `output_buffer` | `deque[dict]` | 翻译输出环形缓冲区，容量 200 条 |
 | `output_lock` | `threading.Lock` | 保护 `output_buffer` 的线程锁 |
 | `MAX_OUTPUT_LINES` | `int` | 缓冲区最大条目数（200） |
+| `_engine_init_status` | `str` | Pipeline 后台初始化状态：`"initializing"` \| `"ready"` \| `"error"` |
+| `_engine_init_error` | `str` | 当 status=error 时存储错误信息 |
 
 **API：**
 
 ```python
-gui.state.init(engine)      # 初始化，只调用一次
-gui.state.get_engine()      # 获取引擎；未初始化时抛 RuntimeError
+gui.state.init(engine)                    # 初始化，只调用一次
+gui.state.get_engine()                    # 获取引擎；未初始化时抛 RuntimeError
+gui.state.set_engine_ready()              # 后台初始化线程成功后调用
+gui.state.set_engine_error(msg)           # 后台初始化失败时调用
+gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 ```
 
 每条 `output_buffer` 记录的格式：
@@ -134,6 +144,15 @@ gui.state.get_engine()      # 获取引擎；未初始化时抛 RuntimeError
 | `List` | `ui.input`（JSON 数组字符串） |
 | `LanguageCode` | `ui.input` |
 
+**动态选项加载器（options_loader）**
+
+模块的 `get_config_attributes()` 可为某个属性添加 `"options_loader": "<loader_name>"` 字段。
+`create_module_form` 检测到该字段后，会在渲染时调用对应加载器，并生成 `ui.select` 下拉菜单（能选中 None 表示系统默认）。
+
+| 加载器名 | 来源 | 说明 |
+|----------|------|—---|
+| `"microphone"` | `MicrophoneSource.device_name` | 枚举当前系统所有麦克风（含“系统默认”选项） |
+
 ### read_form_values(elements) → dict
 
 从 `create_module_form` 返回的 `elements` 中读取当前值，并转换为 Python 原生类型：
@@ -153,6 +172,11 @@ gui.state.get_engine()      # 获取引擎；未初始化时抛 RuntimeError
 ### `/` — 首页（home.py）
 
 管道状态总览，显示配置中所有管道（不限于运行中的）。
+
+**页面顶部初始化状态横幅：**
+- `_engine_init_status == "initializing"`：显示蓝色转圈 + 提示文字
+- `_engine_init_status == "error"`：显示红色错误信息
+- `_engine_init_status == "ready"`：横幅自动消失
 
 **每个管道卡片包含：**
 - 状态徽章（`running` / `enabled-pending` / `stopped`）
@@ -244,8 +268,8 @@ gui.state.get_engine()      # 获取引擎；未初始化时抛 RuntimeError
 
 每个实例以 `ui.expansion` 展示：
 - 当前 params 键值
-- **编辑参数** 按钮：打开对话框，使用 `create_module_form(config_attrs, cur_params)` 回填现有值；确认后 `read_form_values()` → 更新 `config["modules"][ref_id]["params"]` → save+reload
-- **删除此实例** 按钮：弹出确认对话框；若该 ref_id 被任意管道 routes 引用，则显示橙色警告（仍可删除）；确认后从 config 中移除并 reload
+- **编辑参数** 按钮：打开对话框，使用 `create_module_form(config_attrs, cur_params)` 回填现有值；确认后 `read_form_values()` → 更新 `config["modules"][ref_id]["params"]` → `engine.save_config()`（**仅持久化，不自动重载**，需在首页点击「重载所有配置」生效）
+- **删除此实例** 按钮：弹出确认对话框；若该 ref_id 被任意管道 routes 引用，则显示橙色警告（仍可删除）；确认后从 config 中移除并 `engine.save_config()`（**不自动重载**）
 
 #### 区块 B — 新增模块实例
 

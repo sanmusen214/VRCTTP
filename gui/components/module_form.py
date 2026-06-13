@@ -3,15 +3,40 @@
 
 根据模块类的 get_config_attributes() 生成对应的 NiceGUI 输入组件，
 并提供读取当前值的工具函数。
+
+扩展点：options_loader
+  config attribute 可携带 "options_loader" 字段，值为已注册的加载器名称。
+  module_form 会在渲染时调用对应加载器获取选项，并生成 ui.select 下拉菜单。
+  已内置加载器：
+    "microphone" — 枚举当前系统所有麦克风设备（含"系统默认"空选项）
 """
 from __future__ import annotations
 
 import json
+import warnings
 from typing import Any
 
 from nicegui import ui
 
 from core.module import ParamType
+
+
+def _load_microphone_options() -> dict:
+    """枚举系统麦克风，返回 {None: '（系统默认）', name: name, ...} 字典供 ui.select 使用。"""
+    options: dict[str | None, str] = {None: "（系统默认）"}
+    try:
+        import soundcard as sc
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="soundcard")
+        for m in sc.all_microphones(include_loopback=False):
+            options[m.name] = m.name
+    except Exception:
+        pass  # soundcard 不可用时仅提供"系统默认"选项
+    return options
+
+
+_OPTIONS_LOADERS: dict[str, Any] = {
+    "microphone": _load_microphone_options,
+}
 
 
 def create_module_form(
@@ -37,7 +62,18 @@ def create_module_form(
         label = f"{'* ' if required else ''}{name}"
 
         with ui.column().classes("w-full gap-0 q-mb-sm"):
-            if param_type == ParamType.Bool:
+            options_loader_key = attr.get("options_loader")
+            if options_loader_key and options_loader_key in _OPTIONS_LOADERS:
+                # 动态选项：调用加载器获取选项字典，渲染 ui.select 下拉菜单
+                options = _OPTIONS_LOADERS[options_loader_key]()
+                # 当前值不在选项 key 列表中时，fallback 到 None（系统默认）
+                select_val = current_val if current_val in options else None
+                el = ui.select(
+                    options,
+                    label=label,
+                    value=select_val,
+                ).classes("w-full")
+            elif param_type == ParamType.Bool:
                 el = ui.switch(
                     label,
                     value=bool(current_val) if current_val is not None else False,

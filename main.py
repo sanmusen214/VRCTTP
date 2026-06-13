@@ -76,7 +76,7 @@ def _list_devices() -> None:
     print()
 
 
-def _start_gui(engine, host: str, port: int) -> threading.Thread:
+def _start_gui(engine, host: str, port: int, show: bool = False) -> threading.Thread:
     """在独立线程中启动 NiceGUI。"""
     from gui.app import create_app
 
@@ -87,7 +87,7 @@ def _start_gui(engine, host: str, port: int) -> threading.Thread:
             host=host,
             port=port,
             reload=False,
-            show=False,
+            show=show,
             title="VRChat 实时翻译流",
         )
 
@@ -143,29 +143,50 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    # 加载并启动
+    # 快速读取配置（只解析 JSON，不加载模型）
     try:
         engine.load_config()
-        engine.build_all()
     except Exception as e:
         logger.error("加载配置失败: %s", e)
         sys.exit(1)
 
-    engine.start_all()
-
-    # 启动 GUI（可选）
+    # 优先启动 GUI，让用户界面立即可用
     gui_cfg = engine.get_gui_config()
     gui_enabled = gui_cfg.get("enabled", True) and not args.no_gui
     if gui_enabled:
         gui_host = gui_cfg.get("host", "0.0.0.0")
         gui_port = int(gui_cfg.get("port", 8080))
         try:
-            _start_gui(engine, gui_host, gui_port)
+            _start_gui(engine, gui_host, gui_port, show=True)
             logger.info("NiceGUI 已启动: http://localhost:%d", gui_port)
         except Exception:
             logger.exception("启动 GUI 失败，将以无 GUI 模式继续运行")
 
-    logger.info("所有管道已启动，按 Ctrl+C 退出")
+    # 在后台线程中执行耗时的 Pipeline 初始化（本地模型加载等）
+    import gui.state as _gui_state
+
+    def _init_pipelines():
+        try:
+            logger.info("后台初始化 Pipeline...")
+            engine.build_all()
+            engine.start_all()
+            _gui_state.set_engine_ready()
+            logger.info("所有管道已启动")
+        except Exception as e:
+            logger.error("管道初始化失败: %s", e)
+            _gui_state.set_engine_error(str(e))
+
+    if gui_enabled:
+        threading.Thread(target=_init_pipelines, name="engine-init", daemon=True).start()
+    else:
+        # 无 GUI 模式：同步初始化
+        try:
+            engine.build_all()
+            engine.start_all()
+        except Exception as e:
+            logger.error("加载配置失败: %s", e)
+            sys.exit(1)
+        logger.info("所有管道已启动，按 Ctrl+C 退出")
 
     # 主循环：等待退出信号
     try:
