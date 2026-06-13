@@ -7,9 +7,10 @@ package.py — VRCTTP 打包脚本
 流程：
     1. 使用 PyInstaller + main.spec 构建程序
     2. 净化 .env（将所有值替换为键名，防止密钥泄露），复制到 dist/main/_internal/
-    3. 在 dist/main/ 内创建空的 models 文件夹（用于放置本地语音识别模型）
-    4. 将主程序 dist/main/main.exe 重命名为 VRCTTP v{VERSION}.exe
-    5. 将输出文件夹 dist/main 重命名为 dist/VRCTTP
+    3. 将 config.json 复制到打包目录根（dist/main/）
+    4. 在 dist/main/ 内创建空的 models 文件夹（用于放置本地语音识别模型）
+    5. 将主程序 dist/main/main.exe 重命名为 VRCTTP v{VERSION}.exe
+    6. 将输出文件夹 dist/main 重命名为 dist/VRCTTP
 """
 
 import os
@@ -25,6 +26,7 @@ VERSION = "0.1.0"
 ROOT_DIR      = os.path.dirname(os.path.abspath(__file__))
 SPEC_FILE     = os.path.join(ROOT_DIR, "main.spec")
 ENV_SRC       = os.path.join(ROOT_DIR, ".env")
+CONFIG_SRC    = os.path.join(ROOT_DIR, "config.json")
 DIST_MAIN     = os.path.join(ROOT_DIR, "dist", "main")
 INTERNAL_DIR  = os.path.join(DIST_MAIN, "_internal")
 MODELS_DIR    = os.path.join(DIST_MAIN, "models")
@@ -85,7 +87,19 @@ def copy_env() -> None:
     print(f"✅ 净化后的 .env 已写入: {dst}")
 
 
-# ── Step 3: 创建空 models 文件夹 ──────────────────────────────────────────
+# ── Step 3: 复制 config.json ─────────────────────────────────────────────
+
+def copy_config() -> None:
+    step("复制 config.json 到打包目录")
+    if not os.path.isfile(CONFIG_SRC):
+        print("⚠  未找到 config.json，跳过")
+        return
+    dst = os.path.join(DIST_MAIN, "config.json")
+    shutil.copy2(CONFIG_SRC, dst)
+    print(f"✅ config.json 已复制到: {dst}")
+
+
+# ── Step 4: 创建空 models 文件夹 ──────────────────────────────────────────
 
 def create_models_dir() -> None:
     step("创建空的 models 文件夹")
@@ -129,6 +143,7 @@ def rename_dist_folder() -> None:
 if __name__ == "__main__":
     build()
     copy_env()
+    copy_config()
     create_models_dir()
     rename_exe()
     rename_dist_folder()
