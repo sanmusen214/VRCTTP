@@ -139,6 +139,10 @@ class VRChatOSCConsumer(PacketConsumerModule):
         for p in reversed(self.last_10_translated_packages):
             if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED) and p.get(self._group_by) == latest_trans_timestamp:
                 latest_trans_packets.append(p)
+        # 可能列表里的包来自不同的管道，获取到最新的这些翻译包来自哪一个管道
+        focus_pipeline_id = None
+        if latest_trans_packets:
+            focus_pipeline_id = latest_trans_packets[-1].pipeline_id
         # 2. 字典存放不同语言的翻译结果
         trans_results = {}
         for p in latest_trans_packets:
@@ -147,10 +151,10 @@ class VRChatOSCConsumer(PacketConsumerModule):
             if lang and trans:
                 trans_results[lang] = trans
         # 3. 得到历史翻译包中一共有几种语言
-        # 收集历史翻译包中一共有几种语言
+        # 收集历史翻译包中一共有几种语言, 根据 focus_pipeline_id 筛选下，避免根据另一个管道的语言筛选了
         existing_langs = set()
         for p in self.last_10_translated_packages:
-            if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED):
+            if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED) and p.pipeline_id == focus_pipeline_id:
                 existing_langs.add(p.get(KEY_TARGET_LANG))
         # 根据历史列表里有几种语言，设置这次聚合目标语言数量 group_numbers
         self._group_numbers = len(existing_langs)

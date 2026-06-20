@@ -19,7 +19,7 @@ _PAGES = [
 ]
 
 
-def create_nav(title: str = "VRChat 实时翻译流") -> None:
+def create_nav(title: str = "VRCTTP 实时翻译 群号 964670098") -> None:
     """在当前页面顶部渲染导航栏（含深色/浅色切换开关）。"""
     dark = ui.dark_mode()
     engine = get_engine()

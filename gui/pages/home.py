@@ -15,7 +15,7 @@ def register(app) -> None:  # noqa: ARG001
 
     @ui.page("/")
     async def home() -> None:
-        ui.page_title("VRChat 实时翻译流")
+        ui.page_title("VRCTTP")
         create_nav()
         engine = state.get_engine()
 
