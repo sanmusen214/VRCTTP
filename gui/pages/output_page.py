@@ -43,12 +43,11 @@ def register(app) -> None:  # noqa: ARG001
                         ).classes("text-grey")
                     return
 
-                for mod_id, module in instances.items():
+                for module in instances.values():
                     with ui.card().classes("w-full q-pa-sm"):
                         ui.label(
-                            f"{module._ref_id} · {module.config.get('pipeline_id', '?')}"
+                            f"{module.display_name} · {module.config.get('pipeline_id', '?')}"
                         ).classes("text-subtitle2 text-bold")
-                        ui.label(f"module_id: {mod_id}").classes("text-caption text-grey")
 
                         def _make_send(m: TextInput):
                             def _send(inp: ui.input) -> None:
@@ -56,7 +55,7 @@ def register(app) -> None:  # noqa: ARG001
                                 if not text:
                                     return
                                 m.submit_text(text)
-                                ui.notify(f"已发送到 {m._ref_id!r}: {text!r}", type="positive")
+                                ui.notify(f"已发送到 {m.display_name!r}: {text!r}", type="positive")
                                 inp.value = ""
                             return _send
 

@@ -75,6 +75,7 @@ class BaseModule(ABC):
         module_id:  完整命名空间 ID（如 "vrchat.volc_stt"），用于日志
         _ref_id:    config 中定义的本地引用 ID（如 "volc_stt"），
                     用作节点时间戳 key（"timestamp_volc_stt"）
+        display_name: GUI 使用的可编辑名称，不参与路由和缓存
 
     共享实例说明：
         当同一模块实例被多条 pipeline 共用时，start()/stop() 使用引用计数：
@@ -88,6 +89,7 @@ class BaseModule(ABC):
         self.config = config
         # 本地引用 ID：由 engine 通过 config["_ref_id"] 注入
         self._ref_id: str = config.get("_ref_id", module_id)
+        self.display_name: str = config.get("_display_name", self._ref_id)
         _queue_size = config.get("_queue_size", 2)
         self.input_queue: queue.Queue[MessagePacket | None] = queue.Queue(maxsize=_queue_size)
         self._thread: threading.Thread | None = None

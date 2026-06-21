@@ -19,6 +19,7 @@ import re
 from typing import Any
 
 from core.module import BaseModule, PacketConsumerModule, PacketProducerModule
+from core.module_identity import ensure_module_display_names, module_display_name
 from core.pipeline import Pipeline
 
 # 延迟导入具体模块类，避免循环依赖
@@ -110,11 +111,12 @@ class PipelineEngine:
         """从磁盘加载并解析配置文件。"""
         with open(self.config_path, "r", encoding="utf-8") as f:
             raw = json.load(f)
-        self._raw_config = _resolve_env_vars(raw)
+        self._raw_config = ensure_module_display_names(_resolve_env_vars(raw))
         logger.info("已加载配置文件: %s", self.config_path)
 
     def save_config(self, config_dict: dict) -> None:
         """将配置字典写回磁盘（保留注释不可能，但保留缩进格式）。"""
+        ensure_module_display_names(config_dict)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(config_dict, f, ensure_ascii=False, indent=2)
         logger.info("配置已保存至: %s", self.config_path)
@@ -122,7 +124,7 @@ class PipelineEngine:
     def get_raw_config(self) -> dict:
         """返回未做环境变量替换的原始配置（供 GUI 编辑器展示）。"""
         with open(self.config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return ensure_module_display_names(json.load(f))
 
     def get_module_classes(self) -> dict[str, type[BaseModule]]:
         """返回所有已注册模块类型的注册表（type 字符串 → 类）。"""
@@ -180,12 +182,14 @@ class PipelineEngine:
                 )
             mod_def = global_modules_cfg[ref_id]
             mod_type = mod_def["type"]
+            display_name = module_display_name(ref_id, mod_def)
 
             # 音频源（PacketProducerModule）每条 pipeline 独立实例化，
             # 因为它持有 pipeline 专属的路由上下文，不能跨 pipeline 共享。
             if mod_type in PRODUCER_REGISTRY:
                 params = dict(mod_def.get("params", {}))
                 params["_ref_id"] = ref_id
+                params["_display_name"] = display_name
                 params["pipeline_id"] = pid
                 params["_queue_size"] = global_queue_size
                 module: BaseModule = PRODUCER_REGISTRY[mod_type](
@@ -207,6 +211,7 @@ class PipelineEngine:
             if mod_type in MODULE_REGISTRY:
                 params = dict(mod_def.get("params", {}))
                 params["_ref_id"] = ref_id
+                params["_display_name"] = display_name
                 params["pipeline_id"] = pid
                 params["pipeline_name"] = name
                 params["_queue_size"] = global_queue_size
@@ -412,13 +417,14 @@ class PipelineEngine:
             if not mod_def or mod_def.get("type") != "local_stt":
                 continue
             model_path = mod_def.get("params", {}).get("model_path", "")
+            display_name = module_display_name(ref_id, mod_def)
             if not model_path:
                 warnings_list.append(
-                    f"模块「{ref_id}」未配置 model_path，请在「模块目录」页中填写本地模型路径。"
+                    f"模块「{display_name}」未配置 model_path，请在「模块目录」页中填写本地模型路径。"
                 )
             elif not os.path.isdir(model_path):
                 warnings_list.append(
-                    f"模块「{ref_id}」的模型目录不存在：{model_path}\n"
+                    f"模块「{display_name}」的模型目录不存在：{model_path}\n"
                     f"请下载对应的 FunASR 模型并解压到该目录，然后重启程序。"
                 )
         return warnings_list

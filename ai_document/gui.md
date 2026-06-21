@@ -226,7 +226,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 
 **每个管道卡片包含：**
 - `enabled` 开关：仅保存 config（不重载）
-- 路由图（路由名 → 目标模块 ID 列表）
+- 路由图（模块显示名称 → 目标模块显示名称列表；内部 `ref_id` 不展示）
 - **编辑** 按鈕（✏ 图标）：打开 `_open_edit_dialog()`，预填当前管道所有字段
 - **复制** 按钮：深拷贝管道配置；新 ID 使用 `<原ID>_copy`，冲突时追加数字；名称使用 `<原名称>（副本）`，冲突时追加数字
 - **删除** 按鈕：弹出确认对话框，确认后从 `config["pipelines"]` 中移除并保存（不重载）
@@ -235,7 +235,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 - 管道 ID 作为只读标签显示，不可修改
 - 显示名称：可修改，预填当前 `name`
 - 启用开关：预填当前 `enabled` 状态
-- Entry 下拉：仅列出 `PRODUCER_REGISTRY` 类型，预选当前 `graph.entry`
+- Entry 下拉：仅列出 `PRODUCER_REGISTRY` 类型，以 `display_name` 展示并以内部 `ref_id` 保存
 - 路由编辑器（`@ui.refreshable`）：从 `graph.routes` dict 转换为逐行展示，支持增删行、修改 from/to；与新建对话框结构相同
 - 确认保存：按 ID 找到原管道在 list 中的位置，原地替换 `name`/`enabled`/`graph`，save（不重载）
 
@@ -255,8 +255,8 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 - 输入字段：管道 ID（唯一，不含空格）、名称、是否启用
 - Entry 下拉：仅列出 `PRODUCER_REGISTRY` 中注册的模块类型（音频源）
 - 路由编辑器（`@ui.refreshable`）：每行一条路由，含：
-  - `from`：ref_id 下拉（来自已配置模块实例）
-  - `to`：目标 ref_id 列表（多选）
+  - `from`：模块显示名称下拉（值仍为内部 `ref_id`）
+  - `to`：目标模块显示名称列表（多选，值仍为内部 `ref_id`）
   - 删除按钮
 - "添加路由行" 按钮动态扩展路由列表
 - 确认时校验 ID 非空且不重复，构建管道 dict，追加至 `config["pipelines"]`，save（不重载）
@@ -274,16 +274,17 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 `draw_instances()` 使用 `@ui.refreshable` 装饰，调用 `engine.get_raw_config()` 读取 `config["modules"]`（跳过 `_` 前缀内部键）。
 
 每个实例以 `ui.expansion` 展示：
+- 标题仅显示 `display_name` 和模块类型，不显示内部 `ref_id`
 - 当前 params 键值
-- **编辑参数** 按钮：打开对话框，使用 `create_module_form(config_attrs, cur_params)` 回填现有值；确认后 `read_form_values()` → 更新 `config["modules"][ref_id]["params"]` → `engine.save_config()`（**仅持久化，不自动重载**，需在首页点击「重载所有配置」生效）
-- **复制** 按钮：深拷贝模块类型和参数；新 ref_id 使用 `<原ref_id>_copy`，冲突时追加数字
+- **编辑** 按钮：可修改 `display_name` 和参数。改名只更新显示名称，内部 `ref_id` 与所有管道路由不变
+- **复制** 按钮：深拷贝模块类型和参数；生成唯一的 `<原显示名称>（副本）`，再由该名称生成新的哈希 `ref_id`
 - **删除此实例** 按钮：弹出确认对话框；若该 ref_id 被任意管道 routes 引用，则显示橙色警告（仍可删除）；确认后从 config 中移除并 `engine.save_config()`（**不自动重载**）
 
 #### 区块 B — 新增模块实例
 
 | 控件 | 说明 |
 |------|------|
-| ref_id 输入框 | 实例引用名（不能含空格、不能与已有实例重名） |
+| 显示名称输入框 | GUI 名称（不能为空、不能与已有模块重名） |
 | 模块类型下拉 | 来自 `engine.get_module_classes()`（字母序） |
 | 动态参数表单 | 随类型切换实时重建（`on_change=lambda e: _rebuild_form(e.value)`） |
 
@@ -291,10 +292,11 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 
 确认创建流程：
 ```
-ref_id 非空校验 → 无重名校验
+display_name 非空校验 → 显示名称无重名校验
+  ↓ `module_ref_id(display_name)` 生成不可见的稳定哈希 ID
   ↓ read_form_values(form_elements)
   ↓ 过滤 None 值
-  ↓ engine.get_raw_config()["modules"][ref_id] = {"type": ..., "params": ...}
+  ↓ engine.get_raw_config()["modules"][ref_id] = {"display_name": ..., "type": ..., "params": ...}
   ↓ engine.save_config()         # 仅持久化，不 reload
   ↓ ui.notify()
   ↓ draw_instances()             # 刷新实例列表
@@ -303,6 +305,13 @@ ref_id 非空校验 → 无重名校验
 #### 区块 C — 模块类型参考（只读，默认折叠）
 
 `ui.expansion("模块类型参考（只读）", value=False)` 内，对每个已注册类型渲染三张元信息表格：require_attributes、add_attributes、config_attributes。直接消费类方法，无需手写文档即可自动生成契约视图。
+
+#### 模块身份兼容规则
+
+- 新建/复制模块：生成 `mod_<16位SHA-256摘要>` 作为内部 `ref_id`
+- 修改显示名称：只修改 `display_name`，不重新计算 `ref_id`
+- 旧配置：加载时以内存规范化方式用原键补齐 `display_name`，下次保存时持久化；原路由和共享实例缓存完全不变
+- 管道页、模块页、文字输入区和本地模型告警均只显示 `display_name`
 
 ---
 

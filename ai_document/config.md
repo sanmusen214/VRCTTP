@@ -23,12 +23,13 @@
 
 ## modules — 全局模块注册表
 
-所有模块（音频源、识别、翻译、过滤、消费者）**统一**在此以 `ref_id` 为键定义。
-`ref_id` 在整个配置文件中唯一标识一个模块逻辑，pipeline 仅通过 `ref_id` 引用它。
+所有模块（音频源、识别、翻译、过滤、消费者）**统一**在此以内部 `ref_id` 为键定义。
+`display_name` 是 GUI 展示和编辑的名称；`ref_id` 仅用于路由、缓存和节点时间戳，GUI 管理页面不会显示它。
 
 ```json
 "modules": {
   "<ref_id>": {
+    "display_name": "<GUI 显示名称>",
     "type":   "<注册类型字符串>",
     "params": { "<参数>": "<值>", ... }
   }
@@ -51,8 +52,12 @@
 
 ### 注意事项
 
+- GUI 新建模块时，`ref_id` 固定为 `mod_` + `SHA-256(初始 display_name UTF-8)` 的前 16 位十六进制摘要
+- `display_name` 必须唯一，可以随时修改；修改后 `ref_id` 不变，因此不会破坏已有 pipeline 路由
+- GUI 复制模块时先生成唯一的 `<原名称>（副本）` 显示名，再由该初始名称生成新的哈希 `ref_id`
+- 旧配置无需迁移：加载时会在内存中以原 `ref_id` 补齐缺失的 `display_name`，路由键保持原样；下次保存配置时持久化该字段
 - `params` 中可用 `${ENV_VAR}` 引用系统环境变量（敏感 key 推荐此方式）
-- engine 会自动向每个模块的 params 注入 `_ref_id`、`pipeline_id`、`pipeline_name`，**不需要**手动填写
+- engine 会自动向每个模块的 params 注入 `_ref_id`、`_display_name`、`pipeline_id`、`pipeline_name`，**不需要**手动填写
 - 同一 `ref_id` 可被多条 pipeline 引用（引擎为每条 pipeline 独立实例化）
 
 ---
@@ -234,7 +239,7 @@ GUI 为可选功能。`enabled: false` 时不启动 Web 服务器，程序仍可
 
 ## 添加新管道的步骤
 
-1. 在 `modules` 中定义所需的模块（已有的 `ref_id` 可直接复用）
+1. 在 `modules` 中定义所需的模块（GUI 中按 `display_name` 选择，内部仍以 `ref_id` 引用）
 2. 在 `pipelines` 数组中追加新条目，写好 `graph.entry` 和 `graph.routes`
 3. 将 `enabled` 设为 `true`
 4. 重启程序（或调用 `engine.reload_config()`）

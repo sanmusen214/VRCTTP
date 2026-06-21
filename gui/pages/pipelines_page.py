@@ -13,6 +13,7 @@ from nicegui import ui
 import gui.state as state
 from gui.components.nav import create_nav
 from core.engine import PRODUCER_REGISTRY
+from core.module_identity import module_display_name
 
 
 def register(app) -> None:  # noqa: ARG001
@@ -40,6 +41,14 @@ def register(app) -> None:  # noqa: ARG001
                     and isinstance(v, dict)
                     and v.get("type") in PRODUCER_REGISTRY
                 ]
+
+            def _module_options(raw: dict, ref_ids: list[str] | None = None) -> dict[str, str]:
+                modules = raw.get("modules", {})
+                ids = ref_ids if ref_ids is not None else _all_ref_ids(raw)
+                return {
+                    ref_id: module_display_name(ref_id, modules.get(ref_id, {}))
+                    for ref_id in ids
+                }
 
             def _copy_pipeline(pipeline_id: str) -> None:
                 raw = engine.get_raw_config()
@@ -87,6 +96,7 @@ def register(app) -> None:  # noqa: ARG001
             def draw_pipelines() -> None:
                 pipelines_container.clear()
                 raw = engine.get_raw_config()
+                module_options = _module_options(raw)
                 pipelines = [
                     p for p in raw.get("pipelines", [])
                     if isinstance(p, dict) and "id" in p
@@ -102,7 +112,7 @@ def register(app) -> None:  # noqa: ARG001
                         name = pipeline.get("name", pid)
                         enabled = pipeline.get("enabled", False)
                         graph = pipeline.get("graph", {})
-                        entry = graph.get("entry", "—")
+                        entry = graph.get("entry", "")
                         routes = {
                             k: v for k, v in graph.get("routes", {}).items()
                             if not k.startswith("_")
@@ -115,7 +125,7 @@ def register(app) -> None:  # noqa: ARG001
                                 with ui.row().classes("items-center justify-between w-full"):
                                     with ui.column().classes("gap-0"):
                                         ui.label(f"ID: {pid}").classes("text-caption")
-                                        ui.label(f"入口: {entry}").classes("text-caption")
+                                        ui.label(f"入口: {module_options.get(entry, '—')}").classes("text-caption")
 
                                     with ui.row().classes("items-center gap-2"):
                                         def _make_toggle(pipeline_id: str):
@@ -173,8 +183,10 @@ def register(app) -> None:  # noqa: ARG001
                                     ui.label("路由图 (routes)").classes("text-caption text-bold")
                                     with ui.column().classes("gap-0"):
                                         for src, dsts in routes.items():
-                                            dst_str = ", ".join(dsts) if dsts else "(终点)"
-                                            ui.label(f"  {src}  →  {dst_str}").classes(
+                                            dst_str = ", ".join(
+                                                module_options.get(dst, "未知模块") for dst in dsts
+                                            ) if dsts else "(终点)"
+                                            ui.label(f"  {module_options.get(src, '未知模块')}  →  {dst_str}").classes(
                                                 "text-caption font-mono"
                                             )
 
@@ -196,6 +208,8 @@ def register(app) -> None:  # noqa: ARG001
                 raw = engine.get_raw_config()
                 all_refs = _all_ref_ids(raw)
                 producer_refs = _producer_ref_ids(raw)
+                all_options = _module_options(raw, all_refs)
+                producer_options = _module_options(raw, producer_refs)
 
                 graph = pipeline_cfg.get("graph", {})
                 existing_entry = graph.get("entry", "")
@@ -222,7 +236,7 @@ def register(app) -> None:  # noqa: ARG001
                     if producer_refs:
                         entry_val = existing_entry if existing_entry in producer_refs else (producer_refs[0] if producer_refs else None)
                         entry_select = ui.select(
-                            producer_refs, label="* 入口模块（PacketProducerModule 类型）",
+                            producer_options, label="* 入口模块（PacketProducerModule 类型）",
                             value=entry_val,
                         ).classes("w-full q-mt-sm")
                     else:
@@ -250,7 +264,7 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_refs,
+                                        all_options,
                                         label="from",
                                         value=row["from_ref"] if row["from_ref"] in all_refs else (all_refs[0] if all_refs else None),
                                         on_change=_make_from_change(i),
@@ -264,7 +278,7 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_refs,
+                                        all_options,
                                         label="to（可多选）",
                                         value=[r for r in row["to_refs"] if r in all_refs],
                                         multiple=True,
@@ -338,6 +352,8 @@ def register(app) -> None:  # noqa: ARG001
                 raw = engine.get_raw_config()
                 all_refs = _all_ref_ids(raw)
                 producer_refs = _producer_ref_ids(raw)
+                all_options = _module_options(raw, all_refs)
+                producer_options = _module_options(raw, producer_refs)
 
                 # routes 邻接表数据，每项：{"from_ref": str, "to_refs": list[str]}
                 routes_rows: list[dict] = []
@@ -353,7 +369,7 @@ def register(app) -> None:  # noqa: ARG001
 
                     if producer_refs:
                         entry_select = ui.select(
-                            producer_refs, label="* 入口模块（PacketProducerModule 类型）",
+                            producer_options, label="* 入口模块（PacketProducerModule 类型）",
                             value=producer_refs[0],
                         ).classes("w-full q-mt-sm")
                     else:
@@ -383,7 +399,7 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_refs,
+                                        all_options,
                                         label="from",
                                         value=row["from_ref"] if row["from_ref"] in all_refs else (all_refs[0] if all_refs else None),
                                         on_change=_make_from_change(i),
@@ -397,7 +413,7 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_refs,
+                                        all_options,
                                         label="to（可多选）",
                                         value=[r for r in row["to_refs"] if r in all_refs],
                                         multiple=True,

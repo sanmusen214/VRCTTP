@@ -14,6 +14,7 @@ from nicegui import ui
 import gui.state as state
 from gui.components.nav import create_nav
 from gui.components.module_form import create_module_form, read_form_values
+from core.module_identity import module_display_name, module_ref_id
 
 
 def register(app) -> None:  # noqa: ARG001
@@ -57,20 +58,32 @@ def register(app) -> None:  # noqa: ARG001
                 modules = raw.get("modules", {})
                 source = modules.get(ref_id)
                 if not isinstance(source, dict):
-                    ui.notify(f"找不到模块实例 {ref_id!r}", type="warning")
+                    ui.notify("找不到要复制的模块实例", type="warning")
                     return
 
-                base_ref_id = f"{ref_id}_copy"
-                new_ref_id = base_ref_id
+                source_name = module_display_name(ref_id, source)
+                existing_names = {
+                    module_display_name(rid, cfg)
+                    for rid, cfg in modules.items()
+                    if not rid.startswith("_") and isinstance(cfg, dict)
+                }
+                base_name = f"{source_name}（副本）"
+                new_name = base_name
                 suffix = 2
-                while new_ref_id in modules:
-                    new_ref_id = f"{base_ref_id}_{suffix}"
+                while new_name in existing_names:
+                    new_name = f"{base_name} {suffix}"
                     suffix += 1
 
-                modules[new_ref_id] = deepcopy(source)
+                new_ref_id = module_ref_id(new_name)
+                if new_ref_id in modules:
+                    ui.notify("模块 ID 哈希冲突，请调整显示名称后重试", type="negative")
+                    return
+                copied = deepcopy(source)
+                copied["display_name"] = new_name
+                modules[new_ref_id] = copied
                 engine.save_config(raw)
                 ui.notify(
-                    f"已复制模块 {ref_id!r} 为 {new_ref_id!r}（需在首页重载生效）",
+                    f"已复制模块为 {new_name!r}（需在首页重载生效）",
                     type="positive",
                 )
                 draw_instances()
@@ -90,12 +103,13 @@ def register(app) -> None:  # noqa: ARG001
 
                     for ref_id, mod_def in real_items:
                         mod_type = mod_def.get("type", "?")
+                        display_name = module_display_name(ref_id, mod_def)
                         params = mod_def.get("params", {})
                         display_params = {k: v for k, v in params.items()
                                           if not k.startswith("_")}
 
                         with ui.expansion(
-                            f"{ref_id}  [{mod_type}]", icon="extension"
+                            f"{display_name}  [{mod_type}]", icon="extension"
                         ).classes("w-full"):
                             with ui.card().classes("w-full q-pa-sm"):
                                 ui.label("params:").classes("text-caption text-grey")
@@ -106,11 +120,11 @@ def register(app) -> None:  # noqa: ARG001
 
                                 ui.separator().classes("q-my-sm")
 
-                                def _make_delete(rid: str):
+                                def _make_delete(rid: str, current_name: str):
                                     def _do_delete() -> None:
                                         using = _pipelines_using(rid, pipelines_list)
                                         with ui.dialog() as dlg, ui.card():
-                                            ui.label(f"确认删除模块实例 {rid!r}？").classes(
+                                            ui.label(f"确认删除模块实例 {current_name!r}？").classes(
                                                 "text-bold"
                                             )
                                             if using:
@@ -126,7 +140,7 @@ def register(app) -> None:  # noqa: ARG001
                                         dlg.open()
                                     return _do_delete
 
-                                def _make_edit(rid: str, mtype: str, cur_params: dict):
+                                def _make_edit(rid: str, current_name: str, mtype: str, cur_params: dict):
                                     def _open_edit() -> None:
                                         cls = module_classes.get(mtype)
                                         if cls is None:
@@ -135,7 +149,10 @@ def register(app) -> None:  # noqa: ARG001
                                         config_attrs = cls.get_config_attributes()
                                         edit_elements: dict = {}
                                         with ui.dialog() as edit_dlg, ui.card().classes("w-full").style("min-width:480px"):
-                                            ui.label(f"编辑参数: {rid}  [{mtype}]").classes("text-h6")
+                                            ui.label(f"编辑模块: {current_name}  [{mtype}]").classes("text-h6")
+                                            name_input = ui.input(
+                                                label="* 显示名称", value=current_name,
+                                            ).classes("w-full")
                                             if config_attrs:
                                                 edit_elements.update(
                                                     create_module_form(config_attrs, cur_params)
@@ -143,13 +160,27 @@ def register(app) -> None:  # noqa: ARG001
                                             else:
                                                 ui.label("该模块无自定义配置参数。").classes("text-caption text-grey")
                                             def _save_edit() -> None:
+                                                new_name = (name_input.value or "").strip()
+                                                if not new_name:
+                                                    ui.notify("显示名称不能为空", type="warning")
+                                                    return
+                                                r = engine.get_raw_config()
+                                                duplicate = any(
+                                                    other_id != rid
+                                                    and isinstance(cfg, dict)
+                                                    and module_display_name(other_id, cfg) == new_name
+                                                    for other_id, cfg in r.get("modules", {}).items()
+                                                )
+                                                if duplicate:
+                                                    ui.notify(f"显示名称 {new_name!r} 已存在", type="warning")
+                                                    return
                                                 new_params = read_form_values(edit_elements)
                                                 new_params = {k: v for k, v in new_params.items() if v is not None}
-                                                r = engine.get_raw_config()
                                                 if rid in r.get("modules", {}):
+                                                    r["modules"][rid]["display_name"] = new_name
                                                     r["modules"][rid]["params"] = new_params
                                                     engine.save_config(r)
-                                                    ui.notify(f"已保存 {rid!r} 的参数（需点击「重载所有配置」生效）", type="positive")
+                                                    ui.notify(f"已保存 {new_name!r}（需点击「重载所有配置」生效）", type="positive")
                                                 edit_dlg.close()
                                                 draw_instances()
                                             with ui.row():
@@ -160,8 +191,8 @@ def register(app) -> None:  # noqa: ARG001
 
                                 with ui.row().classes("gap-2"):
                                     ui.button(
-                                        "编辑参数", icon="edit", color="primary",
-                                        on_click=_make_edit(ref_id, mod_type, display_params),
+                                        "编辑", icon="edit", color="primary",
+                                        on_click=_make_edit(ref_id, display_name, mod_type, display_params),
                                     ).props("flat")
                                     ui.button(
                                         "复制", icon="content_copy", color="primary",
@@ -169,7 +200,7 @@ def register(app) -> None:  # noqa: ARG001
                                     ).props("flat")
                                     ui.button(
                                         "删除此实例", icon="delete", color="negative",
-                                        on_click=_make_delete(ref_id),
+                                        on_click=_make_delete(ref_id, display_name),
                                     ).props("flat")
 
             def _confirm_delete(ref_id: str, dlg) -> None:
@@ -177,7 +208,7 @@ def register(app) -> None:  # noqa: ARG001
                 raw = engine.get_raw_config()
                 raw.get("modules", {}).pop(ref_id, None)
                 engine.save_config(raw)
-                ui.notify(f"已删除模块实例 {ref_id!r}（需点击「重载所有配置」生效）", type="positive")
+                ui.notify("已删除模块实例（需点击「重载所有配置」生效）", type="positive")
                 draw_instances()
 
             draw_instances()
@@ -194,8 +225,8 @@ def register(app) -> None:  # noqa: ARG001
 
             with ui.card().classes("w-full q-pa-md"):
                 with ui.row().classes("items-start gap-4 w-full flex-wrap"):
-                    ref_input = ui.input(
-                        label="* ref_id（实例引用名，如 my_mt_zh）"
+                    name_input = ui.input(
+                        label="* 显示名称（如：翻译到日文）"
                     ).style("min-width:220px")
                     type_select = ui.select(
                         type_names,
@@ -227,28 +258,35 @@ def register(app) -> None:  # noqa: ARG001
                 _rebuild_form()
 
                 def _create_instance() -> None:
-                    ref_id = ref_input.value.strip()
+                    display_name = (name_input.value or "").strip()
                     mod_type = type_select.value
-                    if not ref_id:
-                        ui.notify("ref_id 不能为空", type="warning")
-                        return
-                    if " " in ref_id:
-                        ui.notify("ref_id 不能含空格", type="warning")
+                    if not display_name:
+                        ui.notify("显示名称不能为空", type="warning")
                         return
                     raw = engine.get_raw_config()
-                    if ref_id in raw.get("modules", {}):
-                        ui.notify(f"ref_id {ref_id!r} 已存在", type="warning")
+                    modules = raw.get("modules", {})
+                    if any(
+                        isinstance(cfg, dict)
+                        and module_display_name(rid, cfg) == display_name
+                        for rid, cfg in modules.items()
+                    ):
+                        ui.notify(f"显示名称 {display_name!r} 已存在", type="warning")
+                        return
+                    ref_id = module_ref_id(display_name)
+                    if ref_id in modules:
+                        ui.notify("模块 ID 哈希冲突，请调整显示名称后重试", type="negative")
                         return
                     params = read_form_values(form_elements)
                     # Remove None values to keep JSON clean
                     params = {k: v for k, v in params.items() if v is not None}
                     raw.setdefault("modules", {})[ref_id] = {
+                        "display_name": display_name,
                         "type": mod_type,
                         "params": params,
                     }
                     engine.save_config(raw)
-                    ui.notify(f"已新增模块实例 {ref_id!r}（类型: {mod_type}）", type="positive")
-                    ref_input.value = ""
+                    ui.notify(f"已新增模块实例 {display_name!r}（类型: {mod_type}）", type="positive")
+                    name_input.value = ""
                     draw_instances()
 
                 ui.button(

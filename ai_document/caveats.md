@@ -117,9 +117,11 @@ def process_packet(self, packet):
 
 不要将真实 API Key 提交到版本控制。
 
-### 2. `_ref_id` / `pipeline_id` / `pipeline_name` 由 engine 注入
+### 2. `_ref_id` / `_display_name` / `pipeline_id` / `pipeline_name` 由 engine 注入
 
 不要在 config 中手动写这些字段，engine 会覆盖。
+
+配置顶层模块定义中的 `display_name` 可以修改；内部 `ref_id` 是稳定路由键，修改显示名称时不得同步改键。GUI 新建或复制模块时会根据初始显示名称自动生成哈希 `ref_id`。
 
 ### 3. `entry` 必须是 `PacketProducerModule`
 

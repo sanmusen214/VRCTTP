@@ -115,6 +115,7 @@ BaseModule
 |------|------|
 | `module_id` | 完整 ID，如 `"vrchat_volc_streaming.volc_stt"`，用于日志 |
 | `_ref_id` | 本地引用 ID，如 `"volc_stt"`，来自 `config["_ref_id"]`（由 engine 注入） |
+| `display_name` | GUI 显示名称，来自 engine 注入的 `_display_name`；不参与路由 |
 | `input_queue` | `Queue(maxsize=pipeline_queue_size)`，大小在全局 `config` 可配（默认 2）。满载后自动丢弃旧包塞入新包，避免拥塞延时。 |
 | `_stop_event` | `threading.Event()`，置位表示请求停止 |
 
@@ -275,7 +276,7 @@ MODULE_REGISTRY     = MODULE_REGISTRY
 3. 对每条 pipeline：
    - 收集所有 `ref_id`（entry + routes 中出现的所有节点）
    - 从全局 `modules` 字典查配置，按 `type` 查注册表实例化
-   - engine 自动注入 `_ref_id`、`pipeline_id`、`pipeline_name` 到 params
+   - engine 自动注入 `_ref_id`、`_display_name`、`pipeline_id`、`pipeline_name` 到 params
    - 构建 `Pipeline` 对象并调用 `build()`（连线）
 
 ### engine 注入的隐式参数
@@ -285,6 +286,7 @@ MODULE_REGISTRY     = MODULE_REGISTRY
 | key | 值 |
 |-----|----|
 | `_ref_id` | 模块在配置中的 ref_id（如 `"volc_stt"`） |
+| `_display_name` | 模块的 GUI 显示名称；旧配置缺失时回退为 `_ref_id` |
 | `pipeline_id` | 所属 pipeline 的 id（如 `"vrchat_volc_streaming"`） |
 | `pipeline_name` | 所属 pipeline 的 name（仅 MODULE_REGISTRY 模块） |
 
