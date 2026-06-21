@@ -10,8 +10,7 @@ from gui.state import get_engine
 
 _PAGES = [
     ("首页",     "/"),
-    ("实时输出", "/output"),
-    ("文字输入", "/input"),
+    ("文字输入与输出", "/output"),
     ("管道管理", "/pipelines"),
     ("模块目录", "/modules"),
     ("配置编辑", "/config"),

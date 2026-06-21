@@ -6,7 +6,7 @@ NiceGUI Web 界面入口 — 多页面架构。
     gui/components/nav.py  — 共享导航栏（含深色/浅色实时切换）
     gui/components/module_form.py — 基于 ParamType 的动态模块参数表单
     gui/pages/home.py          — / 首页：管道状态与 enabled 切换
-    gui/pages/output_page.py   — /output 实时翻译输出
+    gui/pages/output_page.py   — /output 文字输入与实时翻译输出
     gui/pages/pipelines_page.py— /pipelines 管道管理（图结构、enabled 切换）
     gui/pages/modules_page.py  — /modules 模块目录（config schema 展示）
     gui/pages/config_page.py   — /config 原始 JSON 配置编辑器
@@ -45,7 +45,7 @@ def create_app(engine: "PipelineEngine") -> None:
 
     # 注册所有页面路由
     from nicegui import app
-    from gui.pages import home, output_page, pipelines_page, modules_page, config_page, env_page, input_page
+    from gui.pages import home, output_page, pipelines_page, modules_page, config_page, env_page
 
     home.register(app)
     output_page.register(app)
@@ -53,6 +53,4 @@ def create_app(engine: "PipelineEngine") -> None:
     modules_page.register(app)
     config_page.register(app)
     env_page.register(app)
-    input_page.register(app)
-
-    logger.info("GUI 页面已注册（7 个路由）")
+    logger.info("GUI 页面已注册（6 个路由）")

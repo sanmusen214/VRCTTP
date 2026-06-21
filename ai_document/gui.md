@@ -18,12 +18,11 @@ gui/
 └── pages/
     ├── __init__.py
     ├── home.py                   # /         首页：管道状态总览
-    ├── output_page.py            # /output   实时翻译输出
+    ├── output_page.py            # /output   GUI 文字输入 + 实时翻译输出
     ├── pipelines_page.py         # /pipelines 管道 CRUD（创建/删除/路由编辑）
     ├── modules_page.py           # /modules  模块实例 CRUD + 类型参考
     ├── config_page.py            # /config   原始 JSON 配置编辑器
-    ├── env_page.py               # /env      .env 环境变量编辑器
-    └── input_page.py             # /input    直接向模块注入文字的测试控制台
+    └── env_page.py               # /env      .env 环境变量编辑器
 ```
 
 ---
@@ -100,7 +99,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 | 显示文字 | 路由 |
 |----------|------|
 | 首页 | `/` |
-| 实时输出 | `/output` |
+| 文字输入与输出 | `/output` |
 | 管道管理 | `/pipelines` |
 | 模块目录 | `/modules` |
 | 配置编辑 | `/config` |
@@ -200,9 +199,16 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 
 ---
 
-### `/output` — 实时翻译输出（output_page.py）
+### `/output` — 文字输入与实时翻译输出（output_page.py）
 
-显示 `state.output_buffer` 中最新至多 200 条翻译记录，最新条目在上。
+页面上方显示所有当前活跃的 `TextInput` 模块实例，每个实例对应一个输入框；
+页面剩余空间显示 `state.output_buffer` 中最新至多 200 条翻译记录，最新条目在上。
+
+**文字输入区：**
+- 从 `TextInput._instances` 动态扫描正在运行的注入节点
+- 支持按 Enter 或点击「发送」提交文字
+- 提交后清空输入框，文字进入对应模块的线程安全队列
+- 「刷新实例」按钮用于响应运行时模块变化
 
 **每条记录显示：**
 - 所属管道名称
@@ -222,6 +228,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 - `enabled` 开关：仅保存 config（不重载）
 - 路由图（路由名 → 目标模块 ID 列表）
 - **编辑** 按鈕（✏ 图标）：打开 `_open_edit_dialog()`，预填当前管道所有字段
+- **复制** 按钮：深拷贝管道配置；新 ID 使用 `<原ID>_copy`，冲突时追加数字；名称使用 `<原名称>（副本）`，冲突时追加数字
 - **删除** 按鈕：弹出确认对话框，确认后从 `config["pipelines"]` 中移除并保存（不重载）
 
 **编辑管道对话框（`_open_edit_dialog(pipeline_id, pipeline_cfg)`）：**
@@ -269,6 +276,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 每个实例以 `ui.expansion` 展示：
 - 当前 params 键值
 - **编辑参数** 按钮：打开对话框，使用 `create_module_form(config_attrs, cur_params)` 回填现有值；确认后 `read_form_values()` → 更新 `config["modules"][ref_id]["params"]` → `engine.save_config()`（**仅持久化，不自动重载**，需在首页点击「重载所有配置」生效）
+- **复制** 按钮：深拷贝模块类型和参数；新 ref_id 使用 `<原ref_id>_copy`，冲突时追加数字
 - **删除此实例** 按钮：弹出确认对话框；若该 ref_id 被任意管道 routes 引用，则显示橙色警告（仍可删除）；确认后从 config 中移除并 `engine.save_config()`（**不自动重载**）
 
 #### 区块 B — 新增模块实例
@@ -295,17 +303,6 @@ ref_id 非空校验 → 无重名校验
 #### 区块 C — 模块类型参考（只读，默认折叠）
 
 `ui.expansion("模块类型参考（只读）", value=False)` 内，对每个已注册类型渲染三张元信息表格：require_attributes、add_attributes、config_attributes。直接消费类方法，无需手写文档即可自动生成契约视图。
-
----
-
-### `/input` — 文字输入控制台（input_page.py）
-
-与底层的 `TextInput` 模块联动。如果当前的活动管道中含有 `text_input` 实例，此页面会自动捕获这些实例对象，并为每一项创建一个输入框视图。
-
-**工作原理：**
-- 从 `TextInput._instances` 动态扫描并挂载正在运行的注入节点实例。
-- GUI 端使用 `ui.refreshable` 来渲染这些输入框，方便对运行中的模块热插拔响应。
-- 文本提交后，UI 的输入框将被清空，文本内容将被压入底层对应模块的线程安全队列（`queue.Queue`）中。
 
 ---
 
@@ -360,7 +357,7 @@ TerminalConsumer
     ├→ 终端彩色打印
     └→ register_gui_callback → state.output_buffer
                                     ↓
-                            /output 页面定时读取并渲染
+                            /output 页面下半部分定时读取并渲染
 ```
 
 `engine.get_status()` 和 `engine.get_raw_config()` 供所有管道相关页面（`/`, `/pipelines`, `/config`）查询当前状态与配置。

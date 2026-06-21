@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from copy import deepcopy
+
 from nicegui import ui
 
 import gui.state as state
@@ -49,6 +51,29 @@ def register(app) -> None:  # noqa: ARG001
                     if ref_id in all_refs:
                         using.append(p.get("id", "?"))
                 return using
+
+            def _copy_module(ref_id: str) -> None:
+                raw = engine.get_raw_config()
+                modules = raw.get("modules", {})
+                source = modules.get(ref_id)
+                if not isinstance(source, dict):
+                    ui.notify(f"找不到模块实例 {ref_id!r}", type="warning")
+                    return
+
+                base_ref_id = f"{ref_id}_copy"
+                new_ref_id = base_ref_id
+                suffix = 2
+                while new_ref_id in modules:
+                    new_ref_id = f"{base_ref_id}_{suffix}"
+                    suffix += 1
+
+                modules[new_ref_id] = deepcopy(source)
+                engine.save_config(raw)
+                ui.notify(
+                    f"已复制模块 {ref_id!r} 为 {new_ref_id!r}（需在首页重载生效）",
+                    type="positive",
+                )
+                draw_instances()
 
             def draw_instances() -> None:
                 instances_container.clear()
@@ -137,6 +162,10 @@ def register(app) -> None:  # noqa: ARG001
                                     ui.button(
                                         "编辑参数", icon="edit", color="primary",
                                         on_click=_make_edit(ref_id, mod_type, display_params),
+                                    ).props("flat")
+                                    ui.button(
+                                        "复制", icon="content_copy", color="primary",
+                                        on_click=lambda _, rid=ref_id: _copy_module(rid),
                                     ).props("flat")
                                     ui.button(
                                         "删除此实例", icon="delete", color="negative",

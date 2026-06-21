@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from copy import deepcopy
+
 from nicegui import ui
 
 import gui.state as state
@@ -38,6 +40,49 @@ def register(app) -> None:  # noqa: ARG001
                     and isinstance(v, dict)
                     and v.get("type") in PRODUCER_REGISTRY
                 ]
+
+            def _copy_pipeline(pipeline_id: str) -> None:
+                raw = engine.get_raw_config()
+                pipelines = raw.get("pipelines", [])
+                source = next(
+                    (p for p in pipelines
+                     if isinstance(p, dict) and p.get("id") == pipeline_id),
+                    None,
+                )
+                if source is None:
+                    ui.notify(f"找不到管道 {pipeline_id!r}", type="warning")
+                    return
+
+                existing_ids = {
+                    p.get("id") for p in pipelines if isinstance(p, dict)
+                }
+                base_id = f"{pipeline_id}_copy"
+                new_id = base_id
+                suffix = 2
+                while new_id in existing_ids:
+                    new_id = f"{base_id}_{suffix}"
+                    suffix += 1
+
+                copied = deepcopy(source)
+                copied["id"] = new_id
+                source_name = source.get("name") or pipeline_id
+                existing_names = {
+                    p.get("name") for p in pipelines if isinstance(p, dict)
+                }
+                base_name = f"{source_name}（副本）"
+                new_name = base_name
+                suffix = 2
+                while new_name in existing_names:
+                    new_name = f"{base_name} {suffix}"
+                    suffix += 1
+                copied["name"] = new_name
+                pipelines.append(copied)
+                engine.save_config(raw)
+                ui.notify(
+                    f"已复制为 [{new_id}] {new_name}（需在首页重载生效）",
+                    type="positive",
+                )
+                draw_pipelines()
 
             def draw_pipelines() -> None:
                 pipelines_container.clear()
@@ -112,6 +157,11 @@ def register(app) -> None:  # noqa: ARG001
                                             icon="edit", color="primary",
                                             on_click=_make_edit_btn(pid, pipeline),
                                         ).props("flat round dense")
+
+                                        ui.button(
+                                            icon="content_copy", color="primary",
+                                            on_click=lambda _, pipeline_id=pid: _copy_pipeline(pipeline_id),
+                                        ).props("flat round dense").tooltip("复制管道")
 
                                         ui.button(
                                             icon="delete", color="negative",

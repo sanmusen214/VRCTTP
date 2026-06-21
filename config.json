@@ -165,6 +165,15 @@
         "source_language": "auto",
         "target_language": "zh"
       }
+    },
+    "翻译到日文-百度翻译API_copy": {
+      "type": "baidu_machine_translation",
+      "params": {
+        "app_id": "${BAIDU_APP_ID}",
+        "app_key": "${BAIDU_APP_KEY}",
+        "source_language": "auto",
+        "target_language": "jp"
+      }
     }
   },
   "pipelines": [
