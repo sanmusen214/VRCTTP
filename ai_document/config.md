@@ -149,10 +149,13 @@ GUI 为可选功能。`enabled: false` 时不启动 Web 服务器，程序仍可
     "sample_rate": 16000,
     "vad_mode": 3,                  // 0-3，3 最灵敏
     "mode": "streaming",            // "batch" 或 "streaming"
-    "chunk_ms": 200                 // 流式模式每包时长（ms）
+    "chunk_ms": 200,                // 流式模式每包时长（ms）
+    "sync_vrc_mic": false           // true = 仅在 VRChat 游戏内开麦时向下游发包
   }
 }
 ```
+
+`microphone` 和 `loopback` 均支持 `sync_vrc_mic`。启用后程序通过 `python-osc` 在 `127.0.0.1:9001` 监听 `/avatar/parameters/MuteSelf`；`false` 表示开麦并放行，`true` 表示静音并拦截。VRChat OSC 未启用或尚未发送状态时不放行数据包。
 
 ### volc_stt
 

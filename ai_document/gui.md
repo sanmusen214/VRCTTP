@@ -164,6 +164,8 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 | `List` | `json.loads(val)`，空→ `[]` |
 | 其他 | 原始字符串，空→ `None` |
 
+`MicrophoneSource` 与 `LoopbackSource` 的 schema 均声明了布尔参数 `sync_vrc_mic`，因此模块新建/编辑对话框会自动显示开关，并提示该选项需要启用 VRChat OSC；无需在页面代码中单独维护控件。
+
 ---
 
 ## 页面详解
@@ -176,6 +178,7 @@ gui.state.get_engine_init_status()        # 返回 (status, error_msg) 元组
 - `_engine_init_status == "initializing"`：显示蓝色转圈 + 提示文字
 - `_engine_init_status == "error"`：显示红色错误信息
 - `_engine_init_status == "ready"`：横幅自动消失
+- 若任一 `enabled=true` 管道实际引用了 `sync_vrc_mic=true` 的 `microphone`/`loopback` 模块：首页持续显示橙色提醒，要求翻译启动后在 VRChat 内切换一次麦克风开关以同步初始状态；同步前默认按静音处理。提醒中列出相关管道显示名称
 
 **每个管道卡片包含：**
 - 状态徽章（`running` / `enabled-pending` / `stopped`）

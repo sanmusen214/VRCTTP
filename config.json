@@ -46,7 +46,8 @@
         "vad_mode": 3,
         "mode": "batch",
         "max_segment_seconds": 30.0,
-        "chunk_ms": 200
+        "chunk_ms": 200,
+        "sync_vrc_mic": false
       },
       "display_name": "分句麦克风"
     },

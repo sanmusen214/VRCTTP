@@ -47,6 +47,7 @@ from core.packet import (
     KEY_TIMESTAMP,
     MessagePacket,
 )
+from modules.audio.vrc_mic_state import vrc_mic_state_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ class VADPacketProducerModule(PacketProducerModule):
         max_segment_seconds (float): 单段最大录音秒数，默认 15
             超过此时长后（批处理模式）会触发智能截断
         chunk_ms (int): 流式模式下每个音频包的时长（ms），默认 200
+        sync_vrc_mic (bool): 是否仅在 VRChat 麦克风开启时向下游发包
     """
 
     SOURCE_TYPE: str = "base"  # 子类覆盖
@@ -111,6 +113,29 @@ class VADPacketProducerModule(PacketProducerModule):
         self._max_segment_seconds: float = config.get("max_segment_seconds", DEFAULT_MAX_SEGMENT_SECONDS)
         self._mode: str = config.get("mode", "batch")
         self._chunk_ms: int = int(config.get("chunk_ms", DEFAULT_CHUNK_MS))
+        self._sync_vrc_mic: bool = bool(config.get("sync_vrc_mic", False))
+        self._vrc_monitor_acquired = False
+        self._last_vrc_mic_state: bool | None = None
+        self._vrc_mic_state_logged = False
+
+    def on_start(self) -> None:
+        if self._sync_vrc_mic:
+            logger.info(
+                "[%s] VRChat 麦克风状态同步已启用，准备启动 OSC 监听",
+                self.module_id,
+            )
+            vrc_mic_state_monitor.acquire()
+            self._vrc_monitor_acquired = True
+        else:
+            logger.info(
+                "[%s] VRChat 麦克风状态同步未启用（sync_vrc_mic=false）",
+                self.module_id,
+            )
+
+    def on_after_stop(self) -> None:
+        if self._vrc_monitor_acquired:
+            vrc_mic_state_monitor.release()
+            self._vrc_monitor_acquired = False
 
     # ------------------------------------------------------------------
     # 子类须实现
@@ -138,14 +163,39 @@ class VADPacketProducerModule(PacketProducerModule):
             try:
                 recorder = self._create_recorder()
                 with recorder as r:
-                    if self._mode == "streaming":
-                        yield from self._streaming_loop(r, pipeline_id, source_name)
-                    else:
-                        yield from self._batch_loop(r, pipeline_id, source_name)
+                    packets = (
+                        self._streaming_loop(r, pipeline_id, source_name)
+                        if self._mode == "streaming"
+                        else self._batch_loop(r, pipeline_id, source_name)
+                    )
+                    for packet in packets:
+                        if self._vrc_mic_allows_output():
+                            yield packet
             except Exception:
                 if not self._stop_event.is_set():
                     logger.exception("[%s] 录音器出错，1秒后重试", self.module_id)
                     time.sleep(1)
+
+    def _vrc_mic_allows_output(self) -> bool:
+        if not self._sync_vrc_mic:
+            return True
+        state = vrc_mic_state_monitor.is_mic_open()
+        if not self._vrc_mic_state_logged or state != self._last_vrc_mic_state:
+            if state is None:
+                logger.warning(
+                    "[%s] 尚未收到 VRChat 麦克风状态，暂不向下游发送音频包",
+                    self.module_id,
+                )
+            else:
+                logger.info(
+                    "[%s] VRChat 麦克风%s，%s向下游发送音频包",
+                    self.module_id,
+                    "开启" if state else "关闭",
+                    "恢复" if state else "暂停",
+                )
+            self._last_vrc_mic_state = state
+            self._vrc_mic_state_logged = True
+        return state is True
 
     # ------------------------------------------------------------------
     # 批处理 VAD 主循环（含智能超长截断）

@@ -46,6 +46,23 @@ def register(app) -> None:  # noqa: ARG001
                                 ui.icon("warning", color="negative").classes("q-mr-sm")
                                 ui.label(f"⚠ 本地语音识别模型缺失：{msg}").classes("text-negative")
 
+                    sync_pipelines = engine.get_vrc_mic_sync_pipeline_names()
+                    if sync_pipelines:
+                        with ui.card().classes("w-full bg-orange-1 q-pa-sm"):
+                            with ui.row().classes("items-start gap-2 no-wrap"):
+                                ui.icon("warning", color="orange").classes("q-mt-xs")
+                                with ui.column().classes("gap-0"):
+                                    ui.label("VRChat 麦克风状态同步已启用").classes(
+                                        "text-bold text-orange-9"
+                                    )
+                                    ui.label(
+                                        "翻译启动后，请在游戏内切换一次麦克风开/关，"
+                                        "以便程序收到初始状态。默认会按麦克风静音处理。"
+                                    ).classes("text-orange-9")
+                                    ui.label(
+                                        f"相关管道：{', '.join(sync_pipelines)}"
+                                    ).classes("text-caption text-orange-8")
+
                 # ── 管道列表 ─────────────────────────────────────────
                 status_col.clear()
                 statuses = engine.get_status()

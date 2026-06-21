@@ -117,8 +117,8 @@ print(ParamType.Password.value)  # → "password"
 
 | 模块类 | 注册类型 | 配置参数数量 | 关键必填参数 |
 |--------|----------|-------------|-------------|
-| `MicrophoneSource` | `microphone` | 6 | — |
-| `LoopbackSource` | `loopback` | 6 | — |
+| `MicrophoneSource` | `microphone` | 7 | — |
+| `LoopbackSource` | `loopback` | 7 | — |
 | `PacketFilter` | `filter` | 3 | `field` |
 | `VolcStreamingSTT` | `volc_streaming_stt` | 7 | — |
 | `LocalParaformerSTT` | `local_stt` | 6 | `model_path` |
@@ -187,6 +187,23 @@ PacketProducerModule
 | `vad_mode` | `2` | webrtcvad 灵敏度（0-3，3 最敏感） |
 | `max_segment_seconds` | `15` | 批处理模式最大段时长（秒） |
 | `chunk_ms` | `200` | 流式模式每包音频时长（ms） |
+| `sync_vrc_mic` | `false` | 是否仅在 VRChat 游戏内麦克风开启时向下游发送数据包 |
+
+#### VRChat 麦克风状态同步
+
+`sync_vrc_mic=true` 时，音频源使用 `python-osc` 监听 VRChat 的 OSC 输出：
+
+- 地址：`/avatar/parameters/MuteSelf`
+- 本地监听：`127.0.0.1:9001`（VRChat 默认 OSC 输出端口）
+- 值为 `true`：游戏内麦克风关闭，不向下游发送音频包
+- 值为 `false`：游戏内麦克风开启，允许向下游发送音频包
+- 尚未收到状态：按关闭处理，防止在状态未知时误发送
+
+监听器是进程级单例并带引用计数，`MicrophoneSource` 和 `LoopbackSource` 以及多条管道可共享同一个 UDP 端口。录音和 VAD 不会暂停，仅在产出的数据包进入下游前过滤，因此游戏内重新开麦后会自动恢复，无需重载管道。
+
+使用前必须在 VRChat 的 Action Menu 中启用 OSC，且 `127.0.0.1:9001/UDP` 不能被其他 OSC 接收程序独占。
+
+启动日志会明确输出 `VRChat 麦克风状态同步已启用` 或 `sync_vrc_mic=false`。只有配置值为 `true` 时才会继续出现 `正在监听 VRChat 麦克风状态`；已有模块实例不会因为新增 schema 自动改成启用，需在 GUI 编辑模块并打开该开关，或在 `params` 中显式配置。
 
 **子类须实现：**
 - `_create_recorder()` → 返回 soundcard recorder context manager
@@ -204,7 +221,8 @@ PacketProducerModule
   "params": {
     "device_name": null,
     "sample_rate": 16000,
-    "vad_mode": 2
+    "vad_mode": 2,
+    "sync_vrc_mic": false
   }
 }
 ```
@@ -212,6 +230,7 @@ PacketProducerModule
 | 参数 | 说明 |
 |------|------|
 | `device_name` | 麦克风设备名，`null` 使用系统默认麦克风 |
+| `sync_vrc_mic` | `true` 时跟随 VRChat 游戏内麦克风开关发送数据包 |
 
 ---
 
@@ -234,7 +253,8 @@ PacketProducerModule
     "sample_rate": 16000,
     "vad_mode": 3,
     "mode": "streaming",
-    "chunk_ms": 200
+    "chunk_ms": 200,
+    "sync_vrc_mic": false
   }
 }
 ```
@@ -242,6 +262,7 @@ PacketProducerModule
 | 参数 | 说明 |
 |------|------|
 | `process_name` | 目标进程名（如 `"VRChat.exe"`），`null` 使用默认扬声器 |
+| `sync_vrc_mic` | `true` 时跟随 VRChat 游戏内麦克风开关发送数据包 |
 
 ---
 

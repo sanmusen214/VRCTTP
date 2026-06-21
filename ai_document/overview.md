@@ -101,7 +101,7 @@ python main.py --list-devices         # 列出音频设备后退出
 | `numpy` | 音频数据处理 |
 | `aiohttp` | 火山引擎 STT WebSocket 客户端 |
 | `requests` | 火山引擎 MT HTTP 客户端 |
-| `python-osc` | OSC 协议发送（VRChat chatbox） |
+| `python-osc` | OSC 协议收发（VRChat chatbox 输出、游戏内麦克风状态监听） |
 | `colorama` | 终端彩色输出（可选） |
 | `scipy` | 高质量音频重采样（可选，退路用 numpy） |
 

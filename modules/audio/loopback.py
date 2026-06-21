@@ -5,6 +5,7 @@ Config 参数：
     process_name (str|null): 目标进程名（如 "VRChat.exe"），null 使用系统默认扬声器环回
     sample_rate (int): 采样率，默认 16000
     vad_mode (int): VAD 灵敏度 0-3，默认 2
+    sync_vrc_mic (bool): 是否跟随 VRChat 游戏内麦克风开关，默认 false
 
 实现说明：
     遍历 soundcard 的 all_microphones(include_loopback=True)，
@@ -58,6 +59,7 @@ class LoopbackSource(VADPacketProducerModule):
             {"name": "mode",               "type": ParamType.Select,   "default": "streaming", "required": False, "description": "工作模式", "selectable": ["batch", "streaming"]},
             {"name": "max_segment_seconds","type": ParamType.Float,    "default": 30.0,        "required": False, "description": "批处理模式最长分段（秒）", "selectable": None, "min": 1.0, "max": 120.0},
             {"name": "chunk_ms",           "type": ParamType.Int,      "default": 200,         "required": False, "description": "流式模式每块时长（ms）", "selectable": None, "min": 50, "max": 2000},
+            {"name": "sync_vrc_mic",       "type": ParamType.Bool,     "default": False,       "required": False, "description": "仅在 VRChat 游戏内麦克风开启时向下游发送数据包（需启用 VRChat OSC）", "selectable": None},
         ]
 
     def _find_loopback_mic(self):

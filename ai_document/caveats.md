@@ -178,6 +178,10 @@ soundcard 采集的音频可能不是 16kHz（取决于设备），`VADPacketPro
 
 `LoopbackSource` 依赖 Windows WASAPI 环回，macOS/Linux 不支持（需要其他方案如 BlackHole、PulseAudio loopback）。
 
+### 5. VRChat 麦克风同步依赖 OSC 输出
+
+`sync_vrc_mic=true` 时监听 `127.0.0.1:9001/UDP` 的 `/avatar/parameters/MuteSelf`。需先在 VRChat 中启用 OSC。若端口已被其他程序占用，监听器无法启动；若尚未收到状态，则安全地视为麦克风关闭，不向下游发包。两个音频模块共享一个监听器，不会在本程序内部重复占用端口。
+
 ---
 
 ## 六、扩展点速查

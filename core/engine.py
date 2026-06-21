@@ -429,6 +429,40 @@ class PipelineEngine:
                 )
         return warnings_list
 
+    def get_vrc_mic_sync_pipeline_names(self) -> list[str]:
+        """返回启用且使用了 VRChat 麦克风状态同步音频源的管道名称。"""
+        raw = self.get_raw_config()
+        modules_cfg = raw.get("modules", {})
+        matched: list[str] = []
+
+        for pipeline_cfg in raw.get("pipelines", []):
+            if not isinstance(pipeline_cfg, dict) or not pipeline_cfg.get("enabled", False):
+                continue
+
+            graph = pipeline_cfg.get("graph", {})
+            referenced: set[str] = set()
+            entry = graph.get("entry")
+            if entry:
+                referenced.add(entry)
+            for from_ref, to_refs in graph.get("routes", {}).items():
+                if from_ref.startswith("_"):
+                    continue
+                referenced.add(from_ref)
+                referenced.update(to_refs)
+
+            uses_sync = any(
+                isinstance(modules_cfg.get(ref_id), dict)
+                and modules_cfg[ref_id].get("type") in ("microphone", "loopback")
+                and modules_cfg[ref_id].get("params", {}).get("sync_vrc_mic") is True
+                for ref_id in referenced
+            )
+            if uses_sync:
+                matched.append(
+                    str(pipeline_cfg.get("name") or pipeline_cfg.get("id") or "未命名管道")
+                )
+
+        return matched
+
     # ------------------------------------------------------------------
     # 状态查询（供 GUI 使用）
     # ------------------------------------------------------------------
