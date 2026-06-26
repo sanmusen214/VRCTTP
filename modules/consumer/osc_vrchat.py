@@ -81,6 +81,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         self.last_10_translated_packages: list[MessagePacket] = []  # 记录之前的十个包(含翻译结果)
         self._last_update_text_content = None # 记录上次更新窗口内容的文本，避免重复发送相同内容
         self.waiting_important_sent = False # 是否正在等待重要包的发送（重要包发送后会有0.4秒的冷却时间，避免短时间内重复发送）
+        self._important_send_timer: threading.Timer | None = None
 
     def _get_client(self) -> SimpleUDPClient:
         if self._client is None:
@@ -119,10 +120,12 @@ class VRChatOSCConsumer(PacketConsumerModule):
         client.send_message(CHATBOX_ADDRESS, [text, True, self._trigger_sfx])
         if close_waiting_important_status:
             self.waiting_important_sent = False
+            self._important_send_timer = None
         logger.debug("[%s] OSC 发送: %r", self.module_id, text[:60])
 
     def process_packet(self, packet: MessagePacket) -> list[MessagePacket]:
         """处理包，发送 OSC 消息。"""
+        logger.info("[%s] 1. 收到包", self.module_id)
         self.update_packages_window_content(packet)  # 更新窗口内容
         self.update_final_package_window_content(packet)  # 更新窗口内容
         # 多分支聚合多语言结果后发送
@@ -139,10 +142,12 @@ class VRChatOSCConsumer(PacketConsumerModule):
         for p in reversed(self.last_10_translated_packages):
             if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED) and p.get(self._group_by) == latest_trans_timestamp:
                 latest_trans_packets.append(p)
+        # logger.info("[%s] 2. 最新翻译包数量: %d", self.module_id, len(latest_trans_packets))
         # 可能列表里的包来自不同的管道，获取到最新的这些翻译包来自哪一个管道
         focus_pipeline_id = None
         if latest_trans_packets:
             focus_pipeline_id = latest_trans_packets[-1].pipeline_id
+        logger.info("[%s] 2. 最新翻译包来自管道: %s", self.module_id, focus_pipeline_id)
         # 2. 字典存放不同语言的翻译结果
         trans_results = {}
         for p in latest_trans_packets:
@@ -156,6 +161,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         for p in self.last_10_translated_packages:
             if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED) and p.pipeline_id == focus_pipeline_id:
                 existing_langs.add(p.get(KEY_TARGET_LANG))
+        logger.info("[%s] 3. 同管道的历史翻译包语言数量 group_numbers: %s， 目前收集了 %s 种语言", self.module_id, existing_langs, trans_results.keys())
         # 根据历史列表里有几种语言，设置这次聚合目标语言数量 group_numbers
         self._group_numbers = len(existing_langs)
         sorted_existing_langs = sorted(list(existing_langs))
@@ -168,7 +174,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
                 count += 1
         if self._group_numbers and count != self._group_numbers:
             # 如果设置了 group_numbers，但实际翻译结果数量不匹配，说明可能是部分翻译结果迟到了，暂不发送翻译结果（翻译结果停留在上一句译文）
-            logger.debug(
+            logger.info(
                 "[%s] 当前翻译结果数量 %d 不满足 group_numbers %d，暂不发送",
                 self.module_id, count, self._group_numbers
             )
@@ -176,12 +182,13 @@ class VRChatOSCConsumer(PacketConsumerModule):
         # 5. 当前包重要性（是否要延迟发送）
         # TODO: 区分当前包的translate结果是不是上一句话完整的翻译结果，而不是这一句的；如果是这样，不能算important包
         now_packet_is_important = False
-        if not packet.is_partial and translated:
+        if not packet.is_partial and translated and count == self._group_numbers:
             # 如果当前包不是流式中间包，且translated不为空，说明当前包集齐了完整的翻译结果
             now_packet_is_important = True
 
         if not translated and not original:
             # 透传无内容的包，避免发送空消息
+            logger.info("[%s] 当前包无翻译结果和原文，跳过发送", self.module_id)
             return [packet]
 
         text = self.concat_final_text(original, translated)
@@ -192,18 +199,23 @@ class VRChatOSCConsumer(PacketConsumerModule):
 
         try:
             if text == self._last_update_text_content:
-                logger.debug("[%s] OSC 消息与上次相同，跳过发送: %r", self.module_id, text[:60])
+                logger.info("[%s] OSC 消息与上次相同，跳过发送: %r...", self.module_id, text[:10])
                 return [packet]
             if self.waiting_important_sent and not now_packet_is_important:
                 # 如果当前处于等待重要包发送状态，且当前包不重要，跳过
+                logger.info("[%s] 当前处于等待重要包发送状态，且当前包不重要，跳过发送: %r...", self.module_id, text[:10])
                 return [packet]
             # 如果包是重要包，延迟0.6秒发送，并设置waiting_important_sent
             if now_packet_is_important:
+                logger.info("[%s] 当前包是重要包，设定了延迟发送: %r...", self.module_id, text[:10])
                 self.waiting_important_sent = True
-                # 在子线程后取消waiting_important_sent状态，避免阻塞主线程
-                threading.Timer(0.6, self.osc_send_text, args=[text, True]).start()
+                if self._important_send_timer and self._important_send_timer.is_alive():
+                    self._important_send_timer.cancel()
+                self._important_send_timer = threading.Timer(0.6, self.osc_send_text, args=[text, True])
+                self._important_send_timer.start()
             else:
                 # 发送 OSC 消息
+                logger.info("[%s] 当前包不是重要包，立即发送: %r...", self.module_id, text[:10])
                 self.osc_send_text(text)
         except Exception:
             logger.exception("[%s] OSC 发送失败", self.module_id)
