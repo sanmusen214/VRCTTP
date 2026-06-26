@@ -125,7 +125,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
 
     def process_packet(self, packet: MessagePacket) -> list[MessagePacket]:
         """处理包，发送 OSC 消息。"""
-        logger.info("[%s] 1. 收到包", self.module_id)
+        # logger.info("[%s] 1. 收到包", self.module_id)
         self.update_packages_window_content(packet)  # 更新窗口内容
         self.update_final_package_window_content(packet)  # 更新窗口内容
         # 多分支聚合多语言结果后发送
@@ -147,7 +147,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         focus_pipeline_id = None
         if latest_trans_packets:
             focus_pipeline_id = latest_trans_packets[-1].pipeline_id
-        logger.info("[%s] 2. 最新翻译包来自管道: %s", self.module_id, focus_pipeline_id)
+        # logger.info("[%s] 1. 最新翻译包来自管道: %s", self.module_id, focus_pipeline_id)
         # 2. 字典存放不同语言的翻译结果
         trans_results = {}
         for p in latest_trans_packets:
@@ -161,7 +161,7 @@ class VRChatOSCConsumer(PacketConsumerModule):
         for p in self.last_10_translated_packages:
             if p.get(KEY_TARGET_LANG) and p.get(KEY_TEXT_TRANSLATED) and p.pipeline_id == focus_pipeline_id:
                 existing_langs.add(p.get(KEY_TARGET_LANG))
-        logger.info("[%s] 3. 同管道的历史翻译包语言数量 group_numbers: %s， 目前收集了 %s 种语言", self.module_id, existing_langs, trans_results.keys())
+        logger.info("[%s] 同管道 %s 的历史翻译包语言数量 group_numbers: %s， 目前收集了 %s 种语言", self.module_id, focus_pipeline_id, existing_langs, trans_results.keys())
         # 根据历史列表里有几种语言，设置这次聚合目标语言数量 group_numbers
         self._group_numbers = len(existing_langs)
         sorted_existing_langs = sorted(list(existing_langs))
@@ -180,10 +180,10 @@ class VRChatOSCConsumer(PacketConsumerModule):
             )
             return [packet]
         # 5. 当前包重要性（是否要延迟发送）
-        # TODO: 区分当前包的translate结果是不是上一句话完整的翻译结果，而不是这一句的；如果是这样，不能算important包
+        # TODO: 流式输出模式下，一句话说完，完整内容会在非partial包里，但是这个包必须得经过翻译模块，所以原文最后一个字会卡一会和翻译一起出现。
         now_packet_is_important = False
-        if not packet.is_partial and translated and count == self._group_numbers:
-            # 如果当前包不是流式中间包，且translated不为空，说明当前包集齐了完整的翻译结果
+        if not packet.is_partial and translated:
+            # 如果当前包不是流式中间包，且translated不为空，则认为是重要包，延迟发送（如果不齐，正好用0.6s等齐了；如果齐了，0.6s延迟就发了）
             now_packet_is_important = True
 
         if not translated and not original:

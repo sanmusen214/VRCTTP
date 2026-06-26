@@ -182,6 +182,16 @@
         "target_language": "zh"
       },
       "display_name": "翻译到中文-百度翻译API"
+    },
+    "mod_82a2acacfaa354f5": {
+      "display_name": "大语言翻译模块（需要密钥）",
+      "type": "llm_openai_api_call",
+      "params": {
+        "target_language": "to_en_jp",
+        "api_url": "https://ark.cn-beijing.volces.com/api/v3/responses",
+        "headers_b64": "ewogICJBdXRob3JpemF0aW9uIjogIkJlYXJlciAke2xsbV9hcGlfa2V5fSIsCiAgIkNvbnRlbnQtVHlwZSI6ICJhcHBsaWNhdGlvbi9qc29uIgp9",
+        "payload_b64": "ewogICJtb2RlbCI6ICJkb3ViYW8tc2VlZC0xLTgtMjUxMjI4IiwKICAidGhpbmtpbmciOiB7CiAgICAidHlwZSI6ICJkaXNhYmxlZCIKICB9LAogICJpbnB1dCI6IFsKICAgIHsKICAgICAgInJvbGUiOiAidXNlciIsCiAgICAgICJjb250ZW50IjogWwogICAgICAgIHsKICAgICAgICAgICJ0eXBlIjogImlucHV0X3RleHQiLAogICAgICAgICAgInRleHQiOiAiWW91IGFyZSBhIHNraWxsZWQgdHJhbnNsYXRvci4gVHJhbnNsYXRlIHRoZSBmb2xsb3dpbmcgdGV4dCBpbnRvIEVuZ2xpYWggYW5kIEphcGFuLCBhbmQgdGhlbiByZXR1cm4gb25seSB0aGUgdHJhbnNsYXRpb24gcmVzdWx0LCB3aXRoIG5vIGV4cGxhbmF0aW9uOlxuJXtvcmlnaW5hbH0iCiAgICAgICAgfQogICAgICBdCiAgICB9CiAgXQp9"
+      }
     }
   },
   "pipelines": [
@@ -189,10 +199,8 @@
       "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
       "id": "mic_volc_streaming",
       "name": "麦克风中文到英语（流式-火山引擎API）",
-      "enabled": false,
+      "enabled": true,
       "graph": {
-        "_comment": "entry 必须是 PacketProducerModule 类型的 ref_id；routes 用邻接表描述所有模块连接。",
-        "_comment_filter": "final_only 过滤器拦截中间流式贵包（is_partial=true），只允许最终结果进入翻译环节。",
         "entry": "流式麦克风",
         "routes": {
           "流式麦克风": [
@@ -202,9 +210,9 @@
             "中间件-GUI输入文字"
           ],
           "中间件-GUI输入文字": [
-            "翻译到英文-火山豆包API"
+            "mod_82a2acacfaa354f5"
           ],
-          "翻译到英文-火山豆包API": [
+          "mod_82a2acacfaa354f5": [
             "软件日志输出",
             "VRChat输出"
           ]
@@ -214,7 +222,7 @@
     {
       "id": "mic_local_stt",
       "name": "麦克风中文到英语（分句-本地识别-百度翻译）",
-      "enabled": true,
+      "enabled": false,
       "graph": {
         "entry": "分句麦克风",
         "routes": {

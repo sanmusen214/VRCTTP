@@ -30,6 +30,7 @@ from modules.consumer.terminal import TerminalConsumer
 from modules.filter.packet_filter import PacketFilter
 from modules.input.text_input import TextInput
 from modules.translation.baidu_machine_translation import BaiduMachineTranslation
+from modules.translation.llm_openai_api_call import LLMOpenAIAPICall
 from modules.translation.LocalSTTModel import LocalParaformerSTT
 from modules.translation.volc_machine_translation import VolcMachineTranslation
 from modules.translation.volc_streaming_stt import VolcStreamingSTT
@@ -52,6 +53,7 @@ MODULE_REGISTRY: dict[str, type[PacketConsumerModule]] = {
     "local_stt": LocalParaformerSTT,
     "volc_machine_translation": VolcMachineTranslation,
     "baidu_machine_translation": BaiduMachineTranslation,
+    "llm_openai_api_call": LLMOpenAIAPICall,
     "terminal": TerminalConsumer,
     "osc_vrchat": VRChatOSCConsumer,
     "filter": PacketFilter,

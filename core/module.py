@@ -59,6 +59,8 @@ class ParamType(Enum):
     FilePath = "filepath"    # 文件路径，GUI 可提供文件浏览器
     List = "list"            # 列表（JSON 数组）
     LanguageCode = "language_code"  # BCP-47 语言代码字符串
+    HeaderPairsB64 = "header_pairs_b64"  # GUI 明文编辑，配置中 base64 存储 JSON 对象
+    JsonTextB64 = "json_text_b64"        # GUI 明文编辑，配置中 base64 存储 JSON 文本
 
 
 class BaseModule(ABC):

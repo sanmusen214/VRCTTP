@@ -12,8 +12,10 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import warnings
+from dataclasses import dataclass
 from typing import Any
 
 from nicegui import ui
@@ -37,6 +39,63 @@ def _load_microphone_options() -> dict:
 _OPTIONS_LOADERS: dict[str, Any] = {
     "microphone": _load_microphone_options,
 }
+
+
+def _b64_encode_text(text: str) -> str:
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def _b64_decode_text(value: Any, fallback: str = "") -> str:
+    if value in (None, ""):
+        return fallback
+    if not isinstance(value, str):
+        return fallback
+    try:
+        return base64.b64decode(value.encode("ascii"), validate=True).decode("utf-8")
+    except Exception:
+        return value
+
+
+@dataclass
+class _HeaderPairsEditor:
+    rows: list[dict[str, str]]
+
+    @property
+    def value(self) -> str:
+        headers = {
+            row.get("key", "").strip(): row.get("value", "")
+            for row in self.rows
+            if row.get("key", "").strip()
+        }
+        return _b64_encode_text(json.dumps(headers, ensure_ascii=False, indent=2))
+
+
+@dataclass
+class _JsonTextEditor:
+    element: Any
+
+    @property
+    def value(self) -> str:
+        return _b64_encode_text(self.element.value or "")
+
+
+def _decode_headers_param(current_val: Any, default: Any) -> dict[str, str]:
+    decoded = _b64_decode_text(current_val, _b64_decode_text(default, "{}"))
+    try:
+        parsed = json.loads(decoded)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(k): str(v) for k, v in parsed.items()}
+
+
+def _is_valid_json_object_or_array(text: str) -> bool:
+    try:
+        json.loads(text or "")
+        return True
+    except json.JSONDecodeError:
+        return False
 
 
 def create_module_form(
@@ -98,6 +157,55 @@ def create_module_form(
                     else "[]"
                 )
                 el = ui.input(label=f"{label} (JSON 数组)", value=display).classes("w-full")
+            elif param_type == ParamType.HeaderPairsB64:
+                headers = _decode_headers_param(current_val, default)
+                rows = [{"key": k, "value": v} for k, v in headers.items()]
+                if not rows:
+                    rows.append({"key": "", "value": ""})
+                el = _HeaderPairsEditor(rows)
+
+                @ui.refreshable
+                def header_editor() -> None:
+                    with ui.column().classes("w-full gap-2"):
+                        for idx, row in enumerate(rows):
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.input(
+                                    label="Header name",
+                                    value=row.get("key", ""),
+                                    on_change=lambda e, i=idx: rows[i].update(key=e.value or ""),
+                                ).classes("col")
+                                ui.input(
+                                    label="Header value",
+                                    value=row.get("value", ""),
+                                    on_change=lambda e, i=idx: rows[i].update(value=e.value or ""),
+                                ).classes("col")
+                                ui.button(
+                                    icon="delete",
+                                    on_click=lambda i=idx: (rows.pop(i), header_editor.refresh()),
+                                ).props("flat dense")
+                        ui.button(
+                            "添加 Header",
+                            icon="add",
+                            on_click=lambda: (rows.append({"key": "", "value": ""}), header_editor.refresh()),
+                        ).props("outline")
+
+                header_editor()
+            elif param_type == ParamType.JsonTextB64:
+                display = _b64_decode_text(current_val, _b64_decode_text(default, "{}"))
+                status = ui.label("").classes("text-caption")
+                el_raw = ui.textarea(label=label, value=display).classes("w-full").props("rows=14")
+                el = _JsonTextEditor(el_raw)
+
+                def _update_json_status() -> None:
+                    if _is_valid_json_object_or_array(el_raw.value or ""):
+                        status.text = "JSON 格式检查通过"
+                        status.classes(replace="text-caption text-positive")
+                    else:
+                        status.text = "JSON 格式可能有误：请检查括号、引号和逗号"
+                        status.classes(replace="text-caption text-negative")
+
+                el_raw.on("update:model-value", lambda _: _update_json_status())
+                _update_json_status()
             elif param_type in (ParamType.Int, ParamType.Float):
                 el = ui.input(
                     label=label,
@@ -132,6 +240,13 @@ def read_form_values(elements: dict[str, tuple[Any, ParamType]]) -> dict:
                 result[name] = float(val) if val not in (None, "") else None
             elif param_type == ParamType.List:
                 result[name] = json.loads(val) if val else []
+            elif param_type == ParamType.JsonTextB64:
+                decoded = _b64_decode_text(val, "")
+                if not _is_valid_json_object_or_array(decoded):
+                    ui.notify(f"{name} JSON 格式可能有误，请检查括号、引号和逗号", type="warning")
+                result[name] = val if val else None
+            elif param_type == ParamType.HeaderPairsB64:
+                result[name] = val if val else None
             else:
                 result[name] = val if val else None
         except (ValueError, json.JSONDecodeError):
