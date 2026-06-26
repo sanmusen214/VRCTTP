@@ -199,7 +199,7 @@
       "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
       "id": "mic_volc_streaming",
       "name": "麦克风中文到英语（流式-火山引擎API）",
-      "enabled": true,
+      "enabled": false,
       "graph": {
         "entry": "流式麦克风",
         "routes": {
@@ -222,7 +222,7 @@
     {
       "id": "mic_local_stt",
       "name": "麦克风中文到英语（分句-本地识别-百度翻译）",
-      "enabled": false,
+      "enabled": true,
       "graph": {
         "entry": "分句麦克风",
         "routes": {
