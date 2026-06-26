@@ -1,193 +1,217 @@
-# config.json 配置文件说明
+﻿# config.json 配置说明
+
+`config.json` 定义所有模块实例和 pipeline 拓扑。GUI 对模块和管道的增删改最终也会写回这个文件。
 
 ## 顶层结构
 
 ```json
 {
-  "pipeline_queue_size": 2, // 数据包队列缓存大小上限（默认 2）
-  "modules":   { ... },     // 全局模块注册表（所有模块在此统一定义）
-  "pipelines": [ ... ],     // 管道拓扑列表
-  "gui":       { ... }      // Web GUI 配置
+  "pipeline_queue_size": 2,
+  "modules": {},
+  "pipelines": [],
+  "gui": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 8082
+  }
 }
 ```
 
----
+| 字段 | 说明 |
+|------|------|
+| `pipeline_queue_size` | 模块输入队列大小，越小越实时，越大越能缓冲 |
+| `modules` | 全局模块实例注册表 |
+| `pipelines` | pipeline 列表 |
+| `gui` | Web GUI 配置 |
 
-## 顶层属性
+## modules
 
-### pipeline_queue_size
-控制 pipeline 中各模块相互传递数据包时的队列缓存大小，默认值为 2。
-较小的值能确保在 STT 识别卡顿或下游处理缓慢时及时清空旧包，让管道保持绝对实时的数据流传输；当设置为过大时反而可能会发生堵塞排队现象。
-
----
-
-## modules — 全局模块注册表
-
-所有模块（音频源、识别、翻译、过滤、消费者）**统一**在此以内部 `ref_id` 为键定义。
-`display_name` 是 GUI 展示和编辑的名称；`ref_id` 仅用于路由、缓存和节点时间戳，GUI 管理页面不会显示它。
+`modules` 以稳定 `ref_id` 为键定义模块实例。
 
 ```json
 "modules": {
-  "<ref_id>": {
-    "display_name": "<GUI 显示名称>",
-    "type":   "<注册类型字符串>",
-    "params": { "<参数>": "<值>", ... }
+  "my_module_ref_id": {
+    "display_name": "GUI 显示名称",
+    "type": "模块注册类型",
+    "params": {}
   }
 }
 ```
 
-### 支持的 type 值
+### ref_id 与 display_name
 
-| type | 类 | 说明 |
-|------|----|------|
-| `"microphone"` | `MicrophoneSource` | 麦克风音频源 |
-| `"loopback"` | `LoopbackSource` | 系统音频环回源 |
-| `"volc_streaming_stt"` | `VolcStreamingSTT` | 火山引擎流式 STT |
-| `"local_stt"` | `LocalParaformerSTT` | 本地 FunASR Paraformer STT（无需网络） |
-| `"volc_machine_translation"` | `VolcMachineTranslation` | 火山引擎机器翻译 |
-| `"baidu_machine_translation"` | `BaiduMachineTranslation` | 百度通用翻译 |
-| `"terminal"` | `TerminalConsumer` | 终端输出 |
-| `"osc_vrchat"` | `VRChatOSCConsumer` | VRChat OSC 输出 |
-| `"filter"` | `PacketFilter` | 通用包过滤器 |
+| 字段 | 用途 |
+|------|------|
+| `ref_id` | 配置对象的 key，用于路由、缓存和时间戳 |
+| `display_name` | GUI 展示名称，可修改，不影响路由 |
 
-### 注意事项
+GUI 新建模块时会生成 `mod_<sha256(display_name)[:16]>` 作为 `ref_id`。复制模块时会先生成唯一显示名，再生成新的 `ref_id`。
 
-- GUI 新建模块时，`ref_id` 固定为 `mod_` + `SHA-256(初始 display_name UTF-8)` 的前 16 位十六进制摘要
-- `display_name` 必须唯一，可以随时修改；修改后 `ref_id` 不变，因此不会破坏已有 pipeline 路由
-- GUI 复制模块时先生成唯一的 `<原名称>（副本）` 显示名，再由该初始名称生成新的哈希 `ref_id`
-- 旧配置无需迁移：加载时会在内存中以原 `ref_id` 补齐缺失的 `display_name`，路由键保持原样；下次保存配置时持久化该字段
-- `params` 中可用 `${ENV_VAR}` 引用系统环境变量（敏感 key 推荐此方式）
-- engine 会自动向每个模块的 params 注入 `_ref_id`、`_display_name`、`pipeline_id`、`pipeline_name`，**不需要**手动填写
-- 同一 `ref_id` 可被多条 pipeline 引用（引擎为每条 pipeline 独立实例化）
+### 支持的 type
 
----
+| type | 说明 |
+|------|------|
+| `microphone` | 麦克风音频源 |
+| `loopback` | 系统或进程音频环回 |
+| `text_input` | GUI 文本输入 |
+| `volc_streaming_stt` | 火山引擎 STT |
+| `local_stt` | 本地 FunASR STT |
+| `volc_machine_translation` | 火山引擎机器翻译 |
+| `baidu_machine_translation` | 百度翻译 |
+| `llm_openai_api_call` | 通用 LLM JSON API 翻译 |
+| `filter` | 字段过滤器 |
+| `terminal` | 终端输出 |
+| `osc_vrchat` | VRChat OSC 输出 |
 
-## pipelines — 管道列表
+## pipelines
+
+每条 pipeline 是一张 DAG。
 
 ```json
-"pipelines": [
-  {
-    "id":      "唯一 pipeline ID",
-    "name":    "人类可读名称",
-    "enabled": true,
-    "graph": {
-      "entry":  "<PacketProducerModule 的 ref_id>",
-      "routes": {
-        "<from_ref_id>": ["<to_ref_id>", ...],
-        ...
-      }
+{
+  "id": "pipeline_id",
+  "name": "显示名称",
+  "enabled": true,
+  "graph": {
+    "entry": "source_ref_id",
+    "routes": {
+      "source_ref_id": ["next_ref_id"],
+      "next_ref_id": ["consumer_ref_id"]
     }
   }
-]
-```
-
-### 规则
-
-- `enabled: false` 的 pipeline 被 engine 跳过，不实例化任何模块
-- `entry` 必须是 `PacketProducerModule` 类型模块的 `ref_id`（否则 `Pipeline.__post_init__` 报错）
-- `routes` 的邻接表中出现的所有 `ref_id`（包括 entry、from、to）必须在全局 `modules` 中定义
-- `routes` 中可定义 fan-out（一对多）：`"volc_stt": ["terminal_out", "final_only"]`
-- `routes` 中未出现的孤立 `ref_id` 不会被连线（但仍会被实例化和启动）
-
-### fan-out 行为
-
-当一个模块有多个下游时：
-- 每个下游收到**独立的深拷贝**（`packet.clone()`），不共享状态
-- 广播顺序与 routes 列表顺序一致（但由于是多线程，处理顺序不保证）
-
----
-
-## 当前配置的两条管道
-
-### vrchat_volc_streaming（启用，流式单语）
-
-```
-loopback_vrchat → volc_stt → terminal_out   （实时流式显示，含中间结果）
-                           ↘ final_only → mt_zh → osc_out
-```
-
-- `final_only` 过滤掉 `is_partial=True` 的包，只让最终识别结果进入翻译环节
-- `mt_zh` 翻译成中文后发送到 VRChat 聊天框
-
-### vrchat_bilingual（禁用，双语示例）
-
-```
-loopback_vrchat → volc_stt → mt_zh → terminal_bilingual
-                           ↘ mt_ja → osc_bilingual
-```
-
-- 两路翻译（中文+日文）并行
-- `terminal_bilingual` 和 `osc_bilingual` 均配置了 `group_by: "timestamp_volc_stt"`
-- 同一 STT 时间戳的两个翻译结果会被合并为一行显示，格式：`中文结果 / 日文结果`
-
----
-
-## gui — Web GUI 配置
-
-```json
-"gui": {
-  "enabled": true,
-  "host":    "0.0.0.0",
-  "port":    8082
 }
 ```
 
-GUI 为可选功能。`enabled: false` 时不启动 Web 服务器，程序仍可正常运行，
-翻译结果通过 TerminalConsumer 在命令行输出。
+规则：
 
----
+- `id` 必须唯一。
+- `entry` 必须指向 producer 模块，例如 `microphone`、`loopback`、`text_input`。
+- `routes` 中出现的所有 ref_id 必须在 `modules` 中存在。
+- 一个 from 可以指向多个 to，实现 fan-out。
+- `enabled=false` 的 pipeline 不会启动。
 
-## 完整 modules 字段参考
+## 环境变量占位符
 
-### loopback_vrchat
+普通配置字符串支持 `${ENV_VAR}`：
 
 ```json
-"loopback_vrchat": {
-  "type": "loopback",
+"api_key": "${VOLC_API_KEY}"
+```
+
+如果环境变量不存在，engine 会保留原占位符并记录 warning。
+
+`llm_openai_api_call` 的 `headers_b64` 和 `payload_b64` 是 base64 字符串，engine 不会看到里面的 `${llm_api_key}`；该模块会在运行时解码后自行替换。
+
+## 常用模块配置示例
+
+### 麦克风
+
+```json
+"mic": {
+  "display_name": "麦克风",
+  "type": "microphone",
   "params": {
-    "process_name": "VRChat.exe",   // null = 默认扬声器
     "sample_rate": 16000,
-    "vad_mode": 3,                  // 0-3，3 最灵敏
-    "mode": "streaming",            // "batch" 或 "streaming"
-    "chunk_ms": 200,                // 流式模式每包时长（ms）
-    "sync_vrc_mic": false           // true = 仅在 VRChat 游戏内开麦时向下游发包
+    "vad_mode": 3,
+    "mode": "streaming",
+    "chunk_ms": 200,
+    "sync_vrc_mic": false
   }
 }
 ```
 
-`microphone` 和 `loopback` 均支持 `sync_vrc_mic`。启用后程序通过 `python-osc` 在 `127.0.0.1:9001` 监听 `/avatar/parameters/MuteSelf`；`false` 表示开麦并放行，`true` 表示静音并拦截。VRChat OSC 未启用或尚未发送状态时不放行数据包。
+### 系统音频环回
 
-### volc_stt
+```json
+"vrchat_audio": {
+  "display_name": "VRChat 音频",
+  "type": "loopback",
+  "params": {
+    "process_name": "VRChat.exe",
+    "sample_rate": 16000,
+    "vad_mode": 3,
+    "mode": "streaming",
+    "chunk_ms": 200
+  }
+}
+```
+
+### 火山 STT
 
 ```json
 "volc_stt": {
+  "display_name": "火山流式识别",
   "type": "volc_streaming_stt",
   "params": {
-    "api_key": "${VOLC_API_KEY}",                  // 新版控制台 UUID Key
-    "resource_id": "volc.seedasr.sauc.duration",   // 按时长计费资源
-    "language": "en",
-    "streaming_mode": true                          // 与音频源 mode="streaming" 配套
-  }
-}
-```
-
-### mt_zh / mt_ja
-
-```json
-"mt_zh": {
-  "type": "volc_machine_translation",
-  "params": {
     "api_key": "${VOLC_API_KEY}",
-    "source_language": "",           // 空 = 自动检测
-    "target_language": "zh"
+    "resource_id": "volc.seedasr.sauc.duration",
+    "language": "",
+    "streaming_mode": true
   }
 }
 ```
 
-### terminal_out
+### 只放行最终包
 
 ```json
-"terminal_out": {
+"final_only": {
+  "display_name": "最终结果过滤",
+  "type": "filter",
+  "params": {
+    "field": "is_partial",
+    "pass_when": false
+  }
+}
+```
+
+### 百度翻译
+
+```json
+"baidu_en": {
+  "display_name": "百度翻译到英文",
+  "type": "baidu_machine_translation",
+  "params": {
+    "app_id": "${BAIDU_APP_ID}",
+    "app_key": "${BAIDU_APP_KEY}",
+    "source_language": "auto",
+    "target_language": "en"
+  }
+}
+```
+
+### LLM 翻译
+
+```json
+"llm_en": {
+  "display_name": "LLM 翻译到英文",
+  "type": "llm_openai_api_call",
+  "params": {
+    "target_language": "english",
+    "api_url": "https://ark.cn-beijing.volces.com/api/v3/responses",
+    "headers_b64": "base64 encoded JSON object",
+    "payload_b64": "base64 encoded JSON text"
+  }
+}
+```
+
+建议通过 GUI 编辑 LLM headers 和 payload。GUI 会自动处理 base64 编码。
+
+默认 headers 明文：
+
+```json
+{
+  "Authorization": "Bearer ${llm_api_key}",
+  "Content-Type": "application/json"
+}
+```
+
+payload 明文中用 `%{original}` 表示上游识别文本。
+
+### 终端输出
+
+```json
+"terminal": {
+  "display_name": "终端输出",
   "type": "terminal",
   "params": {
     "color": true
@@ -195,56 +219,56 @@ GUI 为可选功能。`enabled: false` 时不启动 Web 服务器，程序仍可
 }
 ```
 
-### osc_out
+### VRChat OSC 输出
 
 ```json
-"osc_out": {
+"osc": {
+  "display_name": "VRChat 输出",
   "type": "osc_vrchat",
   "params": {
     "host": "127.0.0.1",
     "port": 9000,
-    "trigger_sfx": false
+    "trigger_sfx": false,
+    "template": "{translated}",
+    "max_chars": 144
   }
 }
 ```
 
-### final_only（过滤器）
+## 完整 pipeline 示例
 
 ```json
-"final_only": {
-  "type": "filter",
-  "params": {
-    "field": "is_partial",   // 检查 is_partial 字段
-    "pass_when": false       // 只放行 is_partial=false 的包
+{
+  "id": "vrchat_audio_to_english",
+  "name": "VRChat 音频翻译到英文",
+  "enabled": true,
+  "graph": {
+    "entry": "vrchat_audio",
+    "routes": {
+      "vrchat_audio": ["volc_stt"],
+      "volc_stt": ["final_only"],
+      "final_only": ["llm_en"],
+      "llm_en": ["terminal", "osc"]
+    }
   }
 }
 ```
 
-### local_stt（本地 FunASR STT）
+## GUI 配置
 
 ```json
-"local_stt": {
-  "type": "local_stt",
-  "params": {
-    "model_path": "C:\\path\\to\\speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online",
-    "model_name": "paraformer-zh-streaming",
-    "streaming_mode": true,   // true 需搭配音频源 mode="streaming"
-    "chunk_size": [0, 10, 5], // 单次推理窗口：chunk_size[1]*960 样本 = 600ms
-    "encoder_chunk_look_back": 4,
-    "decoder_chunk_look_back": 1
-  }
+"gui": {
+  "enabled": true,
+  "host": "127.0.0.1",
+  "port": 8082
 }
 ```
 
-> 使用前请先安装依赖：`pip install funasr`
+`enabled=false` 时不启动 Web GUI，管道仍可运行。
 
----
+## 配置编辑注意事项
 
-## 添加新管道的步骤
-
-1. 在 `modules` 中定义所需的模块（GUI 中按 `display_name` 选择，内部仍以 `ref_id` 引用）
-2. 在 `pipelines` 数组中追加新条目，写好 `graph.entry` 和 `graph.routes`
-3. 将 `enabled` 设为 `true`
-4. 重启程序（或调用 `engine.reload_config()`）
-
-新增模块**类型**需要额外在 `core/engine.py` 的 `PRODUCER_REGISTRY` 或 `MODULE_REGISTRY` 中注册。
+- 不要手动写 `_ref_id`、`_display_name`、`pipeline_id`、`pipeline_name`，这些由 engine 注入。
+- API Key 建议放入环境变量或 `.env`。
+- 修改配置文件后，需要重启程序或在 GUI 首页点击“重载所有配置”。
+- `display_name` 可以改，`ref_id` 作为路由键应保持稳定。

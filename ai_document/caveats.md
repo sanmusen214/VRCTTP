@@ -1,196 +1,172 @@
-# 注意事项与开发约定
+﻿# 注意事项与开发约定
 
-## 一、模块开发约定
+本文记录开发新模块、修改配置和运行项目时最容易踩到的点。
 
-### 1. 新增模块必须继承正确的基类
+## 模块开发
 
-| 场景 | 继承 |
+### 选择正确基类
+
+| 场景 | 基类 |
 |------|------|
-| 主动产包（音频采集、文件读取等） | `PacketProducerModule` |
-| 被动处理队列（识别、翻译、过滤、输出等） | `PacketConsumerModule` |
+| 主动产生数据 | `PacketProducerModule` |
+| 从队列取包处理 | `PacketConsumerModule` |
 
-**禁止**在 `start()` / `stop()` 上覆盖——这两个方法是 `@final`。使用生命周期钩子替代：
+不要覆盖 `start()`、`stop()` 或 `_run()`，它们由框架管理。使用生命周期钩子：
 
 ```python
-# ✗ 错误
-def start(self): ...
-def stop(self): ...
-
-# ✓ 正确
-def on_start(self): ...           # 线程启动前
-def on_before_stop(self): ...    # 发出停止信号前
-def on_after_stop(self): ...     # 线程退出后（释放资源）
+def on_start(self): ...
+def on_before_stop(self): ...
+def on_after_stop(self): ...
 ```
 
-### 2. `process_packet` 必须返回 list
+### process_packet 返回值
 
-即使是纯消费（不向下游发包），也要返回 `[]`，不能返回 `None`：
+`process_packet()` 必须返回 `list[MessagePacket]`：
 
 ```python
 def process_packet(self, packet):
-    print(packet.get(KEY_TEXT_TRANSLATED))
-    return []   # ← 不发下游，返回空列表
+    return []        # 消费后不继续发送
+    return [packet]  # 透传
+    return [out]     # 发送修改后的包
 ```
 
-### 3. 不要在 `process_packet` 内部直接调用 `send_to_downstream`
+不要返回 `None`。
 
-框架的 `_dispatch()` 会自动对 `process_packet` 的返回值调用 `send_to_downstream`。直接调用会导致重复发送。
+### 修改包前先 clone
 
-### 4. 过滤逻辑优先用 `pre_process` 钩子，而非 `process_packet` 内部 `return [packet]`
+如果模块要写入字段，应先 clone：
 
 ```python
-# ✓ 推荐：pre_process 返回 None 丢弃包（framework 层面，语义清晰）
-def pre_process(self, packet):
-    return None if packet.is_partial else packet
-
-# 可接受：process_packet 内早返回，但语义略模糊
-def process_packet(self, packet):
-    if packet.is_partial:
-        return []
-    ...
+out = packet.clone()
+out.set(KEY_TEXT_TRANSLATED, translated)
+return [out]
 ```
 
-### 5. 注册新模块类型
+不要直接修改输入包。输入包可能已经被 fan-out 到其他分支。
 
-在 `core/engine.py` 对应注册表中添加一行：
+### 不要重复发送
+
+普通 consumer 不要在 `process_packet()` 内直接调用 `send_to_downstream()`。框架会自动发送返回列表中的每个包。
+
+例外：某些流式模块在异步回调中主动发包时，应确保 `process_packet()` 返回 `[]`，避免重复发送。
+
+### 字段名使用常量
+
+使用 `core.packet` 中的 `KEY_*` 常量：
 
 ```python
-# 生产者
-PRODUCER_REGISTRY["my_source"] = MySourceClass
-
-# 消费者/翻译/过滤
-MODULE_REGISTRY["my_module"] = MyModuleClass
+packet.get(KEY_TEXT_ORIGINAL)
+packet.set(KEY_TEXT_TRANSLATED, result)
 ```
 
----
+## 配置约定
 
-## 二、MessagePacket 使用约定
+### 敏感信息
 
-### 1. 始终使用 KEY 常量，禁止硬编码字符串
-
-```python
-# ✗ 错误
-packet.set("text_original", text)
-
-# ✓ 正确
-from core.packet import KEY_TEXT_ORIGINAL
-packet.set(KEY_TEXT_ORIGINAL, text)
-```
-
-### 2. `is_partial` 只用 property 访问
-
-```python
-# ✓ 正确
-packet.is_partial
-packet.is_partial = True
-
-# ✗ 不要直接操作 data
-packet.data["is_partial"]        # 可读，但绕过 property 语义
-packet.get(KEY_IS_PARTIAL)       # 可用（与 property 等价），但推荐用 property
-```
-
-### 3. 向下游发包前先 `clone()`
-
-如果要修改包内容再发出，必须先 `clone()` 出新包，**不要修改传入的 source 包**（该包可能同时被其他下游使用）：
-
-```python
-def process_packet(self, packet):
-    out = packet.clone()          # ← 创建副本
-    out.set(KEY_TEXT_TRANSLATED, translated)
-    return [out]
-```
-
-### 4. `mark_node_time` 由框架自动调用
-
-`send_to_downstream()` 内部已自动调用 `packet.mark_node_time(self._ref_id)`，
-模块代码**不需要**手动调用。
-
----
-
-## 三、config.json 约定
-
-### 1. 敏感信息用环境变量
+API Key 不要直接写入仓库配置，推荐使用环境变量：
 
 ```json
 "api_key": "${VOLC_API_KEY}"
 ```
 
-不要将真实 API Key 提交到版本控制。
+LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key}`。
 
-### 2. `_ref_id` / `_display_name` / `pipeline_id` / `pipeline_name` 由 engine 注入
+### 隐式字段
 
-不要在 config 中手动写这些字段，engine 会覆盖。
+不要在配置中手动写这些字段：
 
-配置顶层模块定义中的 `display_name` 可以修改；内部 `ref_id` 是稳定路由键，修改显示名称时不得同步改键。GUI 新建或复制模块时会根据初始显示名称自动生成哈希 `ref_id`。
+- `_ref_id`
+- `_display_name`
+- `pipeline_id`
+- `pipeline_name`
+- `_queue_size`
 
-### 3. `entry` 必须是 `PacketProducerModule`
+它们由 `PipelineEngine` 注入。
 
-如果 `entry` 指向一个消费者模块，`Pipeline.__post_init__` 会在启动时立即抛出 `TypeError`。
+### ref_id 不要随意改
 
-### 4. 注释 key 约定
+`ref_id` 是 `modules` 对象的 key，也是 pipeline 路由使用的 ID。改它会破坏 routes。需要改名时修改 `display_name`。
 
-config.json 中以 `"_comment"` 开头的 key（如 `"_comment_audio"`）会被引擎忽略（只读取已知字段），可随意添加行内注释。
+### entry 必须是 producer
 
----
+`graph.entry` 必须指向 `microphone`、`loopback` 或 `text_input` 等 producer。指向 consumer 会导致 pipeline 构建失败。
 
-## 四、线程与并发安全
+## 运行时注意事项
 
-### 1. 每个模块运行在独立守护线程
+### 队列大小
 
-模块的 `_run()` 方法由框架在 `daemon=True` 的线程中调用。进程退出时守护线程自动结束，无需额外清理。
+`pipeline_queue_size` 默认较小，优先保证实时性。如果下游处理太慢，队列满时框架会清空旧包再塞入新包，避免延迟堆积。
 
-### 2. input_queue 容量为 200
+### partial 包
 
-当下游处理速度跟不上上游产包速度时，队列满后新包被**丢弃**并记录 WARNING 日志（`put_nowait` 不阻塞上游）。
+流式 STT 会产生 `is_partial=true` 的中间结果。机器翻译和 LLM 翻译通常应只处理最终结果，因此建议在翻译前插入：
 
-调参建议：
-- 如频繁看到队列丢弃日志，考虑减少上游产包频率（增大 `chunk_ms`）或优化下游处理速度
+```json
+{
+  "type": "filter",
+  "params": {
+    "field": "is_partial",
+    "pass_when": false
+  }
+}
+```
 
-### 3. stop 顺序：反拓扑序
+### 批处理与流式模式要匹配
 
-`Pipeline.stop()` 按反拓扑序停止（叶节点 → 根节点），确保消费者先停、音频源最后停，避免包在停止过程中堆积在队列里。
+音频源 `mode="streaming"` 应搭配 STT `streaming_mode=true`。
 
-哨兵机制：`stop()` 向 `input_queue` 投入 `None`，使阻塞的 `get()` 立即返回并退出循环。若队列已满，投入会静默失败（`_stop_event` 已置位，超时后线程自然退出）。
+音频源 `mode="batch"` 更适合搭配非流式识别。
 
----
+### VRChat OSC
 
-## 五、音频相关
+使用 `osc_vrchat` 输出前：
 
-### 1. VAD 灵敏度选择
+- 在 VRChat 中启用 OSC。
+- 默认发送到 `127.0.0.1:9000`。
+- Chatbox 通常限制 144 字符，模块会按 `max_chars` 截断。
 
-| `vad_mode` | 适用场景 |
-|-----------|---------|
-| `0` | 安静环境，噪声极少 |
-| `1` | 轻度背景噪声 |
-| `2` | 中等噪声（默认） |
-| `3` | 高噪声环境（游戏中推荐，减少误触发） |
+使用 `sync_vrc_mic=true` 前：
 
-### 2. 流式模式配套
+- VRChat 需要启用 OSC 输出。
+- 本程序监听 `127.0.0.1:9001`。
+- 端口不能被其他程序占用。
+- 未收到状态前按麦克风关闭处理。
 
-音频源 `mode="streaming"` 必须搭配 STT 的 `streaming_mode=true`，两边要一致。
-批处理/流式混用（如音频源 streaming + STT batch）会导致包类型不匹配，识别效果极差。
+### 平台限制
 
-### 3. 重采样
+项目主要面向 Windows。`LoopbackSource` 依赖 WASAPI loopback，macOS/Linux 需要额外音频路由方案。
 
-soundcard 采集的音频可能不是 16kHz（取决于设备），`VADPacketProducerModule` 内部会自动重采样到 16kHz（webrtcvad 要求）。安装 `scipy` 可获得更高质量的重采样；未安装时退路使用 numpy 线性插值。
+## LLM 模块注意事项
 
-### 4. 环回设备仅 Windows WASAPI 支持
+`llm_openai_api_call` 是通用 HTTP JSON 调用器，不绑定特定厂商。
 
-`LoopbackSource` 依赖 Windows WASAPI 环回，macOS/Linux 不支持（需要其他方案如 BlackHole、PulseAudio loopback）。
+使用时注意：
 
-### 5. VRChat 麦克风同步依赖 OSC 输出
+- `target_language` 是给下游消费者看的标记，需要用户自行填写。
+- `headers_b64` 必须解码为 JSON object。
+- `payload_b64` 必须解码为 JSON object 文本。
+- `%{original}` 只在 payload 文本中替换。
+- `${llm_api_key}` 从环境变量读取。
+- GUI 中编辑的是明文，保存后自动 base64 编码。
 
-`sync_vrc_mic=true` 时监听 `127.0.0.1:9001/UDP` 的 `/avatar/parameters/MuteSelf`。需先在 VRChat 中启用 OSC。若端口已被其他程序占用，监听器无法启动；若尚未收到状态，则安全地视为麦克风关闭，不向下游发包。两个音频模块共享一个监听器，不会在本程序内部重复占用端口。
+如果响应结构不是模块默认兼容的格式，需要调整 `_extract_text()`。
 
----
+## 新增模块 checklist
 
-## 六、扩展点速查
+1. 选择正确基类。
+2. 实现 `require_attributes_in_packages()`。
+3. 实现 `add_attributes_in_packages()`。
+4. 实现 `get_config_attributes()`。
+5. 实现 `process_packet()` 或 `produce_packets()`。
+6. 需要外部连接时在生命周期钩子中创建和关闭资源。
+7. 在 `core/engine.py` 的注册表中注册 type。
+8. 更新 `ai_document/modules.md` 和 `ai_document/config.md`。
+9. 为高风险逻辑补测试或 smoke test。
 
-| 目标 | 入口 |
-|------|------|
-| 新增音频源类型 | 继承 `VADPacketProducerModule`，实现 `_create_recorder()` + `_source_name()`，注册到 `PRODUCER_REGISTRY` |
-| 新增 STT/MT 服务 | 继承 `PacketConsumerModule`，实现 `process_packet()`，注册到 `MODULE_REGISTRY` |
-| 新增输出目标 | 继承 `PacketConsumerModule`，实现 `process_packet()`（返回 `[]`），注册到 `MODULE_REGISTRY` |
-| 添加过滤条件 | 在 config.json 中插入 `"type": "filter"` 节点，无需写代码 |
-| 双语合并显示 | 对消费者模块配置 `group_by: "timestamp_<stt_ref_id>"`，覆盖 `pre_process()`, `process_packet()`, `post_process()` |
-| GUI 实时数据 | `register_gui_callback(fn)` 注册回调，fn 参数为 `(pipeline_name, original, translated)` |
+## 调试建议
+
+- 先用 `text_input -> 翻译模块 -> terminal` 测翻译模块。
+- 再接入 STT。
+- 最后接入音频源和 VRChat OSC。
+- 网络 API 失败时优先检查环境变量、endpoint、header 和 payload。
+- GUI 保存配置后记得重载。
