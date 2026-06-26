@@ -14,6 +14,13 @@ from nicegui import ui
 import gui.state as state
 from gui.components.nav import create_nav
 from gui.components.module_form import create_module_form, read_form_values
+from gui.module_catalog import (
+    grouped_type_select_options,
+    group_module_instances,
+    group_module_types,
+    module_category_label,
+    module_type_sort_key,
+)
 from core.module_identity import module_display_name, module_ref_id
 
 
@@ -95,13 +102,25 @@ def register(app) -> None:  # noqa: ARG001
                 pipelines_list: list = raw.get("pipelines", [])
 
                 with instances_container:
-                    real_items = [(k, v) for k, v in modules_cfg.items()
-                                  if not k.startswith("_") and isinstance(v, dict)]
+                    grouped_items = group_module_instances(modules_cfg)
+                    real_items = [
+                        (category, ref_id, mod_def)
+                        for category, items in grouped_items.items()
+                        for ref_id, mod_def in items
+                    ]
                     if not real_items:
                         ui.label("尚无模块实例。").classes("text-grey")
                         return
 
-                    for ref_id, mod_def in real_items:
+                    last_category = None
+                    for category, ref_id, mod_def in real_items:
+                        if category != last_category:
+                            ui.label(module_category_label(category)).classes(
+                                "text-subtitle2 text-bold q-mt-sm"
+                            )
+                            ui.separator()
+                            last_category = category
+
                         mod_type = mod_def.get("type", "?")
                         display_name = module_display_name(ref_id, mod_def)
                         params = mod_def.get("params", {})
@@ -221,7 +240,7 @@ def register(app) -> None:  # noqa: ARG001
             ui.label("新增模块实例").classes("text-subtitle1 text-bold")
 
             module_classes = engine.get_module_classes()
-            type_names = sorted(module_classes.keys())
+            type_names = sorted(module_classes.keys(), key=module_type_sort_key)
 
             with ui.card().classes("w-full q-pa-md"):
                 with ui.row().classes("items-start gap-4 w-full flex-wrap"):
@@ -229,11 +248,11 @@ def register(app) -> None:  # noqa: ARG001
                         label="* 显示名称（如：翻译到日文）"
                     ).style("min-width:220px")
                     type_select = ui.select(
-                        type_names,
+                        grouped_type_select_options(type_names),
                         label="* 模块类型",
                         value=type_names[0] if type_names else None,
                         on_change=lambda e: _rebuild_form(e.value),
-                    ).style("min-width:200px")
+                    ).props("options-dense").style("min-width:200px")
 
                 form_container = ui.column().classes("w-full gap-1")
                 form_elements: dict = {}
@@ -301,7 +320,19 @@ def register(app) -> None:  # noqa: ARG001
             # ──────────────────────────────────────────────────────────────
             with ui.expansion("模块类型参考（只读）", icon="menu_book", value=False).classes("w-full"):
                 with ui.column().classes("w-full gap-2 q-pa-sm"):
-                    for type_name, cls in module_classes.items():
+                    type_ref_items = [
+                        (category, type_name)
+                        for category, items in group_module_types(module_classes.keys()).items()
+                        for type_name in items
+                    ]
+                    last_category = None
+                    for category, type_name in type_ref_items:
+                        if category != last_category:
+                            ui.label(module_category_label(category)).classes(
+                                "text-subtitle2 text-bold q-mt-sm"
+                            )
+                            last_category = category
+                        cls = module_classes[type_name]
                         require_attrs = cls.require_attributes_in_packages()
                         add_attrs = cls.add_attributes_in_packages()
                         config_attrs = cls.get_config_attributes()

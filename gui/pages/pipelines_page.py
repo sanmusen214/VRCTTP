@@ -12,6 +12,7 @@ from nicegui import ui
 
 import gui.state as state
 from gui.components.nav import create_nav
+from gui.module_catalog import grouped_module_select_options
 from core.engine import PRODUCER_REGISTRY
 from core.module_identity import module_display_name
 
@@ -210,6 +211,8 @@ def register(app) -> None:  # noqa: ARG001
                 producer_refs = _producer_ref_ids(raw)
                 all_options = _module_options(raw, all_refs)
                 producer_options = _module_options(raw, producer_refs)
+                all_select_options = grouped_module_select_options(raw.get("modules", {}), all_refs)
+                producer_select_options = grouped_module_select_options(raw.get("modules", {}), producer_refs)
 
                 graph = pipeline_cfg.get("graph", {})
                 existing_entry = graph.get("entry", "")
@@ -236,9 +239,9 @@ def register(app) -> None:  # noqa: ARG001
                     if producer_refs:
                         entry_val = existing_entry if existing_entry in producer_refs else (producer_refs[0] if producer_refs else None)
                         entry_select = ui.select(
-                            producer_options, label="* 入口模块（PacketProducerModule 类型）",
+                            producer_select_options, label="* 入口模块（PacketProducerModule 类型）",
                             value=entry_val,
-                        ).classes("w-full q-mt-sm")
+                        ).props("options-dense").classes("w-full q-mt-sm")
                     else:
                         ui.label("⚠ 尚无可用的入口模块（音频源），请先在「模块目录」页新增。").style("color:orange")
                         entry_select = None
@@ -264,11 +267,11 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_options,
+                                        all_select_options,
                                         label="from",
                                         value=row["from_ref"] if row["from_ref"] in all_refs else (all_refs[0] if all_refs else None),
                                         on_change=_make_from_change(i),
-                                    ).style("min-width:160px")
+                                    ).props("options-dense").style("min-width:160px")
 
                                     ui.label("→").classes("text-bold")
 
@@ -278,12 +281,12 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_options,
+                                        all_select_options,
                                         label="to（可多选）",
                                         value=[r for r in row["to_refs"] if r in all_refs],
                                         multiple=True,
                                         on_change=_make_to_change(i),
-                                    ).classes("flex-grow").style("min-width:200px")
+                                    ).props("options-dense").classes("flex-grow").style("min-width:200px")
 
                                     def _make_del_row(idx: int):
                                         def _del() -> None:
@@ -354,6 +357,8 @@ def register(app) -> None:  # noqa: ARG001
                 producer_refs = _producer_ref_ids(raw)
                 all_options = _module_options(raw, all_refs)
                 producer_options = _module_options(raw, producer_refs)
+                all_select_options = grouped_module_select_options(raw.get("modules", {}), all_refs)
+                producer_select_options = grouped_module_select_options(raw.get("modules", {}), producer_refs)
 
                 # routes 邻接表数据，每项：{"from_ref": str, "to_refs": list[str]}
                 routes_rows: list[dict] = []
@@ -369,9 +374,9 @@ def register(app) -> None:  # noqa: ARG001
 
                     if producer_refs:
                         entry_select = ui.select(
-                            producer_options, label="* 入口模块（PacketProducerModule 类型）",
+                            producer_select_options, label="* 入口模块（PacketProducerModule 类型）",
                             value=producer_refs[0],
-                        ).classes("w-full q-mt-sm")
+                        ).props("options-dense").classes("w-full q-mt-sm")
                     else:
                         ui.label("⚠ 尚无可用的入口模块（音频源），请先在「模块目录」页新增。").style("color:orange")
                         entry_select = None
@@ -399,11 +404,11 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_options,
+                                        all_select_options,
                                         label="from",
                                         value=row["from_ref"] if row["from_ref"] in all_refs else (all_refs[0] if all_refs else None),
                                         on_change=_make_from_change(i),
-                                    ).style("min-width:160px")
+                                    ).props("options-dense").style("min-width:160px")
 
                                     ui.label("→").classes("text-bold")
 
@@ -413,12 +418,12 @@ def register(app) -> None:  # noqa: ARG001
                                         return _ch
 
                                     ui.select(
-                                        all_options,
+                                        all_select_options,
                                         label="to（可多选）",
                                         value=[r for r in row["to_refs"] if r in all_refs],
                                         multiple=True,
                                         on_change=_make_to_change(i),
-                                    ).classes("flex-grow").style("min-width:200px")
+                                    ).props("options-dense").classes("flex-grow").style("min-width:200px")
 
                                     def _make_del_row(idx: int):
                                         def _del() -> None:

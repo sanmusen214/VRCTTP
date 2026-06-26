@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from nicegui import ui
 
+import gui.state as state
 from gui.components.nav import create_nav
 
 # .env 文件路径
@@ -57,12 +58,31 @@ def _write_env_file(path: str, header_lines: list[str], kv_pairs: list[tuple[str
             f.write(f"{key}={value}\n")
 
 
+def _apply_env_to_process(
+    old_pairs: list[tuple[str, str]],
+    new_pairs: list[tuple[str, str]],
+) -> None:
+    """Apply .env edits to the current process so config reload can see them."""
+    old_values = {key: value for key, value in old_pairs}
+    new_values = {key: value for key, value in new_pairs}
+
+    for key, value in new_values.items():
+        os.environ[key] = value
+
+    for key, old_value in old_values.items():
+        if key in new_values:
+            continue
+        if os.environ.get(key) == old_value:
+            os.environ.pop(key, None)
+
+
 def register(app) -> None:  # noqa: ARG001
 
     @ui.page("/env")
     def env_page() -> None:
         ui.page_title("环境变量")
         create_nav()
+        engine = state.get_engine()
 
         env_path = os.path.abspath(_ENV_PATH)
         header_lines, kv_pairs = _read_env_file(env_path)
@@ -74,8 +94,8 @@ def register(app) -> None:  # noqa: ARG001
             ui.label("环境变量编辑").classes("text-h5")
             ui.label(f"文件路径: {env_path}").classes("text-caption text-grey font-mono")
             ui.label(
-                "⚠ 修改 .env 后需重启服务才能让引擎感知（${VAR} 替换在启动时完成）。"
-            ).classes("text-caption").style("color: orange")
+                "保存后会立即写入当前进程环境变量，并热重载配置让 ${VAR} 占位符生效。"
+            ).classes("text-caption text-grey")
 
             ui.separator()
 
@@ -143,10 +163,14 @@ def register(app) -> None:  # noqa: ARG001
 
             def _save() -> None:
                 try:
-                    _write_env_file(env_path, header_lines, [(row[0], row[1]) for row in kv_list])
-                    ui.notify("已保存到 .env（重启服务后生效）", type="positive")
+                    new_pairs = [(row[0], row[1]) for row in kv_list]
+                    _write_env_file(env_path, header_lines, new_pairs)
+                    _apply_env_to_process(kv_pairs, new_pairs)
+                    engine.reload_config()
+                    kv_pairs[:] = new_pairs
+                    ui.notify("已保存到 .env，并已应用到当前运行配置", type="positive")
                 except Exception as exc:
                     ui.notify(f"保存失败: {exc}", type="negative")
 
-            ui.button("保存到 .env", icon="save", color="primary", on_click=_save)
+            ui.button("保存并应用 .env", icon="save", color="primary", on_click=_save)
 

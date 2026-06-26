@@ -18,6 +18,8 @@
 | `terminal` | `TerminalConsumer` | 输出 | 终端和 GUI 输出缓冲 |
 | `osc_vrchat` | `VRChatOSCConsumer` | 输出 | VRChat chatbox OSC 输出 |
 
+GUI 展示和选择模块时会按管道流向分区：输入源 → 语音识别 → 过滤处理 → 翻译 → 输出 → 其他。这个顺序用于模块目录页的实例列表、模块类型选择、模块类型参考表，以及管道路由编辑下拉菜单。
+
 ## 音频源
 
 ### MicrophoneSource
