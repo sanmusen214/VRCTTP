@@ -1,4 +1,4 @@
-﻿# config.json 配置说明
+# config.json 配置说明
 
 `config.json` 定义所有模块实例和 pipeline 拓扑。GUI 对模块和管道的增删改最终也会写回这个文件。
 

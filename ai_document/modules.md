@@ -1,4 +1,4 @@
-﻿# 业务模块目录
+# 业务模块目录
 
 本文说明 `modules/` 下各业务模块的职责、输入输出字段和配置参数。模块元信息由三个类方法描述：`require_attributes_in_packages()`、`add_attributes_in_packages()` 和 `get_config_attributes()`。
 
