@@ -46,37 +46,36 @@ logger = logging.getLogger(__name__)
 def _list_devices() -> None:
     """列出所有可用的音频设备。"""
     try:
+        import warnings
+        import soundcard as sc
         from modules.audio.sounddevice_backend import (
             default_input_device,
-            default_output_device,
             list_input_devices,
-            list_loopback_devices,
-            list_output_devices,
         )
+
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="soundcard")
 
         print("\n=== 麦克风设备 ===")
         for device in list_input_devices():
             print(f"  [{device.index}] {device.label}")
 
-        print("\n=== 环回/虚拟录音设备 ===")
-        loopbacks = list_loopback_devices()
-        if loopbacks:
-            for device in loopbacks:
-                print(f"  [{device.index}] {device.label}")
-        else:
-            print("  未发现系统暴露的 loopback 录音设备")
+        print("\n=== 系统音频输出设备（soundcard） ===")
+        speakers = sc.all_speakers()
+        for i, speaker in enumerate(speakers):
+            print(f"  [{i}] {speaker.name}")
 
-        print("\n=== 扬声器设备 ===")
-        for device in list_output_devices():
-            print(f"  [{device.index}] {device.label}")
+        print("\n=== 扬声器环回设备（soundcard） ===")
+        loopbacks = [m for m in sc.all_microphones(include_loopback=True) if m.isloopback]
+        for i, mic in enumerate(loopbacks):
+            print(f"  [{i}] {mic.name}")
 
         try:
-            print(f"\n  默认扬声器: {default_output_device().label}")
+            print(f"\n  默认系统音频输出: {sc.default_speaker().name}")
             print(f"  默认麦克风: {default_input_device().label}")
         except Exception:
             pass
     except ImportError:
-        print("请先安装 sounddevice: pip install sounddevice")
+        print("请先安装 sounddevice 和 soundcard: pip install sounddevice SoundCard")
     print()
 
 

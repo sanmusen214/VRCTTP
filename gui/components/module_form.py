@@ -9,7 +9,7 @@
   module_form 会在渲染时调用对应加载器获取选项，并生成 ui.select 下拉菜单。
   已内置加载器：
     "microphone" — 枚举当前系统所有麦克风设备（含"系统默认"空选项）
-    "loopback" — 枚举当前系统暴露的环回/虚拟录音设备（含"默认系统音频"选项）
+    "loopback" — 使用 soundcard 枚举系统音频输出设备（含"默认系统音频"选项）
 """
 from __future__ import annotations
 
@@ -36,14 +36,19 @@ def _load_microphone_options() -> dict:
 
 
 def _load_loopback_options() -> dict:
-    """枚举系统暴露的环回录音设备，返回 {default: '默认系统音频', name: label, ...}。"""
+    """枚举系统音频输出设备，返回 {default: '默认系统音频', name: name, ...}。"""
     from modules.audio.sounddevice_backend import DEFAULT_SYSTEM_AUDIO_DEVICE
 
     options: dict[str | None, str] = {DEFAULT_SYSTEM_AUDIO_DEVICE: "默认系统音频"}
     try:
-        from modules.audio.sounddevice_backend import list_loopback_devices
-        for device in list_loopback_devices():
-            options[device.label] = device.label
+        import warnings
+        import soundcard as sc
+
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="soundcard")
+        default_speaker = sc.default_speaker()
+        options[DEFAULT_SYSTEM_AUDIO_DEVICE] = f"默认系统音频（{default_speaker.name}）"
+        for speaker in sc.all_speakers():
+            options[speaker.name] = speaker.name
     except Exception:
         pass
     return options
