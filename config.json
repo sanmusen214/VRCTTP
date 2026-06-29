@@ -10,7 +10,7 @@
     "流式音频": {
       "type": "loopback",
       "params": {
-        "process_name": "VRChat.exe",
+        "device_name": "__default_system_audio__",
         "sample_rate": 16000,
         "vad_mode": 3,
         "mode": "streaming",
@@ -31,7 +31,7 @@
     "分句音频": {
       "type": "loopback",
       "params": {
-        "process_name": "VRChat.exe",
+        "device_name": "__default_system_audio__",
         "sample_rate": 16000,
         "vad_mode": 3,
         "mode": "batch",

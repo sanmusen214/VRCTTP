@@ -134,7 +134,7 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 
 ### 平台限制
 
-项目主要面向 Windows。`LoopbackSource` 依赖 WASAPI loopback，macOS/Linux 需要额外音频路由方案。
+项目主要面向 Windows。`LoopbackSource` 使用 `sounddevice`/PortAudio，只捕获系统已暴露为录音设备的 loopback 或虚拟音频设备；如果列表为空，需要先在系统中启用“立体声混音”或安装 Virtual Audio Cable/Voicemeeter 等音频路由方案。macOS/Linux 也需要额外音频路由方案。
 
 ## LLM 模块注意事项
 

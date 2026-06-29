@@ -11,15 +11,16 @@ Config 参数：
 from __future__ import annotations
 
 import logging
-import warnings
-
-import soundcard as sc
 
 from core.module import ParamType
 from modules.audio.base import FRAME_SAMPLES, TARGET_SAMPLE_RATE, VADPacketProducerModule
+from modules.audio.sounddevice_backend import (
+    SoundDeviceRecorder,
+    default_input_device,
+    find_input_device,
+)
 
 logger = logging.getLogger(__name__)
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="soundcard")
 
 
 class MicrophoneSource(VADPacketProducerModule):
@@ -62,16 +63,12 @@ class MicrophoneSource(VADPacketProducerModule):
         device_name: str | None = self.config.get("device_name")
         sample_rate: int = self.config.get("sample_rate", TARGET_SAMPLE_RATE)
 
-        if device_name:
-            mic = sc.get_microphone(id=device_name, include_loopback=False)
-        else:
-            mic = sc.default_microphone()
-
+        mic = find_input_device(device_name)
         logger.info("[%s] 使用麦克风: %s", self.module_id, mic.name)
-        return mic.recorder(samplerate=sample_rate, blocksize=FRAME_SAMPLES)
+        return SoundDeviceRecorder(mic, samplerate=sample_rate, blocksize=FRAME_SAMPLES)
 
     def _source_name(self) -> str:
         device_name = self.config.get("device_name")
         if device_name:
             return device_name
-        return sc.default_microphone().name
+        return default_input_device().name
