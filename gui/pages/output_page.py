@@ -19,6 +19,7 @@ def register(app) -> None:  # noqa: ARG001
     async def output_page() -> None:
         ui.page_title("文字输入与实时输出")
         create_nav()
+        engine = state.get_engine()
 
         with ui.column().classes("w-full max-w-4xl mx-auto q-pa-md gap-4").style("min-height: calc(100vh - 80px)"):
             with ui.row().classes("items-center justify-between w-full"):
@@ -35,6 +36,12 @@ def register(app) -> None:  # noqa: ARG001
             @ui.refreshable
             def draw_inputs() -> None:
                 instances = TextInput._instances
+                raw = engine.get_raw_config()
+                pipeline_names = {
+                    str(p.get("id")): str(p.get("name") or p.get("id"))
+                    for p in raw.get("pipelines", [])
+                    if isinstance(p, dict) and p.get("id")
+                }
                 if not instances:
                     with ui.card().classes("w-full"):
                         ui.label(
@@ -44,9 +51,15 @@ def register(app) -> None:  # noqa: ARG001
                     return
 
                 for module in instances.values():
+                    pipeline_id = module.config.get("pipeline_id", "?")
+                    pipeline_name = (
+                        module.config.get("pipeline_name")
+                        or pipeline_names.get(str(pipeline_id))
+                        or pipeline_id
+                    )
                     with ui.card().classes("w-full q-pa-sm"):
                         ui.label(
-                            f"{module.display_name} · {module.config.get('pipeline_id', '?')}"
+                            f"{module.display_name} · {pipeline_name}"
                         ).classes("text-subtitle2 text-bold")
 
                         def _make_send(m: TextInput):

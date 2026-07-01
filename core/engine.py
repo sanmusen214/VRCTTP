@@ -193,6 +193,7 @@ class PipelineEngine:
                 params["_ref_id"] = ref_id
                 params["_display_name"] = display_name
                 params["pipeline_id"] = pid
+                params["pipeline_name"] = name
                 params["_queue_size"] = global_queue_size
                 module: BaseModule = PRODUCER_REGISTRY[mod_type](
                     module_id=f"{pid}.{ref_id}", config=params
@@ -254,6 +255,7 @@ class PipelineEngine:
         global_queue_size = self._raw_config.get("pipeline_queue_size", 2)
         src_params["_ref_id"] = "audio"
         src_params["pipeline_id"] = pid
+        src_params["pipeline_name"] = name
         src_params["_queue_size"] = global_queue_size
         if src_type not in PRODUCER_REGISTRY:
             raise ValueError(f"未知音频源类型: {src_type!r}，可用: {list(PRODUCER_REGISTRY)}")

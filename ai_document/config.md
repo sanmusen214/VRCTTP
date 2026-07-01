@@ -100,6 +100,8 @@ GUI 中模块会按管道流向分组展示和选择：
 - `routes` 中出现的所有 ref_id 必须在 `modules` 中存在。
 - 一个 from 可以指向多个 to，实现 fan-out。
 - `enabled=false` 的 pipeline 不会启动。
+- GUI 的管道编辑器使用拖拽画布编辑拓扑，但保存时仍只写入 `graph.entry` 和 `graph.routes`。保存会自动丢弃未从入口节点连通的离散节点。
+- GUI 画布中的节点位置、节点宽度、连线选中状态等只属于编辑器界面状态，不写入 `config.json`。
 
 ## 环境变量占位符
 
