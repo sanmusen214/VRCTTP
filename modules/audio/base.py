@@ -169,14 +169,13 @@ class VADPacketProducerModule(PacketProducerModule):
                         else self._batch_loop(r, pipeline_id, source_name)
                     )
                     for packet in packets:
-                        if self._vrc_mic_allows_output():
-                            yield packet
+                        yield packet
             except Exception:
                 if not self._stop_event.is_set():
                     logger.exception("[%s] 录音器出错，1秒后重试", self.module_id)
                     time.sleep(1)
 
-    def _vrc_mic_allows_output(self) -> bool:
+    def _vrc_mic_is_open(self) -> bool:
         if not self._sync_vrc_mic:
             return True
         state = vrc_mic_state_monitor.is_mic_open()
@@ -197,6 +196,10 @@ class VADPacketProducerModule(PacketProducerModule):
             self._vrc_mic_state_logged = True
         return state is True
 
+    def _vrc_mic_allows_new_segment(self) -> bool:
+        """Return whether a new VAD speech segment may start outputting."""
+        return self._vrc_mic_is_open()
+
     # ------------------------------------------------------------------
     # 批处理 VAD 主循环（含智能超长截断）
     # ------------------------------------------------------------------
@@ -216,6 +219,7 @@ class VADPacketProducerModule(PacketProducerModule):
         ring = collections.deque(maxlen=PADDING_FRAMES + PRE_START_RETAIN_FRAMES)  # 语音开始检测环形缓冲 + 上一个窗口
         voiced_buffer: list[bytes] = []
         triggered = False
+        segment_should_emit = False
         end_padding: list[bool] = []
         leftover_pcm = b""
 
@@ -249,7 +253,10 @@ class VADPacketProducerModule(PacketProducerModule):
                     num_voiced = sum(1 for _, s in recent_frames if s)
                     
                     if len(recent_frames) == PADDING_FRAMES and num_voiced / PADDING_FRAMES >= START_RATIO:
+                        if not self._vrc_mic_allows_new_segment():
+                            continue
                         triggered = True
+                        segment_should_emit = True
                         voiced_buffer = [f for f, _ in ring]
                         ring.clear()
                         end_padding.clear()
@@ -272,7 +279,8 @@ class VADPacketProducerModule(PacketProducerModule):
                                 self.module_id, dur,
                                 len(voiced_buffer) * FRAME_DURATION_MS / 1000,
                             )
-                            yield self._build_batch_packet(pipeline_id, source_name, first_pcm)
+                            if segment_should_emit:
+                                yield self._build_batch_packet(pipeline_id, source_name, first_pcm)
                         else:
                             # 找不到截断点，强制发出全部
                             logger.warning(
@@ -283,7 +291,9 @@ class VADPacketProducerModule(PacketProducerModule):
                             voiced_buffer = []
                             end_padding.clear()
                             triggered = False
-                            yield self._build_batch_packet(pipeline_id, source_name, segment_pcm)
+                            if segment_should_emit:
+                                yield self._build_batch_packet(pipeline_id, source_name, segment_pcm)
+                            segment_should_emit = False
                         continue  # 跳过下面的正常结束检测，避免重复处理
 
                     # ── 正常结束检测 ──────────────────────────────────
@@ -295,7 +305,9 @@ class VADPacketProducerModule(PacketProducerModule):
                             segment_pcm = b"".join(voiced_buffer)
                             voiced_buffer = []
                             end_padding.clear()
-                            yield self._build_batch_packet(pipeline_id, source_name, segment_pcm)
+                            if segment_should_emit:
+                                yield self._build_batch_packet(pipeline_id, source_name, segment_pcm)
+                            segment_should_emit = False
 
     def _find_cut_point(self, frames: list[bytes]) -> int:
         """
@@ -343,6 +355,7 @@ class VADPacketProducerModule(PacketProducerModule):
         frame_buffer: list[bytes] = []   # 当前块积累的帧
         end_padding: list[bool] = []
         triggered = False
+        segment_should_emit = False
         chunk_idx = 0
         is_first_chunk = False
         leftover_pcm = b""
@@ -377,8 +390,11 @@ class VADPacketProducerModule(PacketProducerModule):
                     num_voiced = sum(1 for _, s in recent_frames if s)
                     
                     if len(recent_frames) == PADDING_FRAMES and num_voiced / PADDING_FRAMES >= START_RATIO:
+                        if not self._vrc_mic_allows_new_segment():
+                            continue
                         # 语音开始
                         triggered = True
+                        segment_should_emit = True
                         is_first_chunk = True
                         chunk_idx = 0
                         frame_buffer = [f for f, _ in ring]
@@ -394,11 +410,12 @@ class VADPacketProducerModule(PacketProducerModule):
                         emit_frames = frame_buffer[:chunk_frames]
                         frame_buffer = frame_buffer[chunk_frames:]
                         pcm = b"".join(emit_frames)
-                        yield self._build_streaming_chunk(
-                            pipeline_id, source_name, pcm,
-                            chunk_idx=chunk_idx,
-                            is_speech_start=is_first_chunk,
-                        )
+                        if segment_should_emit:
+                            yield self._build_streaming_chunk(
+                                pipeline_id, source_name, pcm,
+                                chunk_idx=chunk_idx,
+                                is_speech_start=is_first_chunk,
+                            )
                         chunk_idx += 1
                         is_first_chunk = False
 
@@ -412,9 +429,11 @@ class VADPacketProducerModule(PacketProducerModule):
                             remaining = b"".join(frame_buffer)
                             frame_buffer = []
                             end_padding.clear()
-                            yield self._build_streaming_final(
-                                pipeline_id, source_name, remaining
-                            )
+                            if segment_should_emit:
+                                yield self._build_streaming_final(
+                                    pipeline_id, source_name, remaining
+                                )
+                            segment_should_emit = False
 
     # ------------------------------------------------------------------
     # 包构建辅助
