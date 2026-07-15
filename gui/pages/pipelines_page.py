@@ -11,6 +11,7 @@ import json
 import re
 import uuid
 
+from fastapi import Request
 from nicegui import ui
 
 import gui.state as state
@@ -579,10 +580,11 @@ def _split_route_graph_editor_assets(content: str) -> tuple[str, str]:
 def register(app) -> None:  # noqa: ARG001
 
     @ui.page("/pipelines")
-    def pipelines_page() -> None:
+    def pipelines_page(request: Request) -> None:
         ui.page_title("管道管理")
         create_nav()
         engine = state.get_engine()
+        requested_edit_pipeline = request.query_params.get("edit_pipeline")
 
         with ui.column().classes("w-full max-w-4xl mx-auto q-pa-md gap-4"):
             ui.label("管道管理").classes("text-h5")
@@ -842,6 +844,35 @@ def register(app) -> None:  # noqa: ARG001
                     ui.timer(0.1, lambda: ui.run_javascript(editor_js), once=True, immediate=False)
 
             draw_pipelines()
+
+            def _clear_edit_query_param() -> None:
+                ui.run_javascript("history.replaceState(null, '', '/pipelines')")
+
+            def _open_requested_edit_dialog() -> None:
+                if not requested_edit_pipeline:
+                    return
+
+                raw = engine.get_raw_config()
+                pipeline_cfg = next(
+                    (
+                        p for p in raw.get("pipelines", [])
+                        if isinstance(p, dict) and p.get("id") == requested_edit_pipeline
+                    ),
+                    None,
+                )
+                _clear_edit_query_param()
+                if pipeline_cfg is None:
+                    ui.notify(f"找不到管道 {requested_edit_pipeline!r}", type="warning")
+                    return
+                _open_edit_dialog(requested_edit_pipeline, pipeline_cfg)
+
+            if requested_edit_pipeline:
+                ui.timer(
+                    0.1,
+                    _open_requested_edit_dialog,
+                    once=True,
+                    immediate=False,
+                )
 
             ui.separator()
 

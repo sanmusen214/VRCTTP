@@ -74,6 +74,7 @@ gui/
 - 显示 engine 初始化状态。
 - 显示所有 pipeline 的启用状态和运行状态。
 - 切换 pipeline 的 `enabled` 字段。
+- 每个 pipeline 卡片可跳转到 `/pipelines?edit_pipeline=<pipeline_id>`，自动打开对应管道编辑弹窗。
 - 提供“重载所有配置”操作。
 - 当启用的 pipeline 使用 `sync_vrc_mic=true` 时，显示 VRChat OSC 同步提醒。
 
@@ -101,6 +102,7 @@ gui/
 
 - 查看所有 pipeline。
 - 创建、编辑、复制、删除 pipeline。
+- 支持通过 `/pipelines?edit_pipeline=<pipeline_id>` 直接打开指定 pipeline 的编辑弹窗；页面会在打开后清除 URL 查询参数，避免刷新重复弹窗。
 - 修改 `enabled`。
 - 使用显示名称编辑路由，但保存内部 `ref_id`。
 - 入口模块只能选择 `PacketProducerModule` 类型模块，例如麦克风、系统环回或 GUI 文本输入。

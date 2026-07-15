@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from nicegui import app as nicegui_app, ui
 
 import gui.state as state
@@ -108,11 +110,20 @@ def register(app) -> None:  # noqa: ARG001
                                         await refresh()
                                     return _toggle
 
-                                ui.switch(
-                                    "启用",
-                                    value=enabled,
-                                    on_change=_make_toggle(pid),
-                                )
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.button(
+                                        icon="edit",
+                                        color="primary",
+                                        on_click=lambda _, pipeline_id=pid: ui.navigate.to(
+                                            f"/pipelines?edit_pipeline={quote(pipeline_id, safe='')}"
+                                        ),
+                                    ).props("flat round dense").tooltip("编辑管道")
+
+                                    ui.switch(
+                                        "启用",
+                                        value=enabled,
+                                        on_change=_make_toggle(pid),
+                                    )
 
                             # Show detail row for running pipelines
                             if pid in running_map:
