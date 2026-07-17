@@ -1,4 +1,4 @@
-version_str = "0.2.0"
+version_str = "0.4.0"
 release_info = """
 # 更新
 
