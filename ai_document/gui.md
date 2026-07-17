@@ -23,7 +23,7 @@ gui/
 1. `main.py` 创建 `PipelineEngine` 并加载配置。
 2. `gui.create_app(engine)` 保存全局 engine 引用。
 3. GUI 注册 `TerminalConsumer` 回调，用于将输出写入 `state.output_buffer`。
-4. NiceGUI 启动 Web 服务；若 `.env` 的最低字段全部为空，首页自动跳转到 `/env`。
+4. NiceGUI 启动 Web 服务；若 `.env` 的最低字段全部为空，本次程序运行第一次进入首页时自动跳转到 `/env`。该引导只触发一次，之后即使尚未填写也可以返回首页。
 5. 后台更新检查完成后将结果写入共享状态，首页定时读取但不阻塞页面打开。
 6. 后台线程构建并启动管道，不阻塞页面打开。
 

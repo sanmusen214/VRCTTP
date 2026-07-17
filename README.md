@@ -84,7 +84,7 @@ BAIDU_APP_KEY=your-baidu-app-key
 
 `.env` 和 `config.json` 均位于程序/exe 同级目录。程序会保证 `.env` 至少包含
 `VOLC_API_KEY`、`BAIDU_APP_ID`、`BAIDU_APP_KEY`、`llm_api_key` 四个字段，缺失字段以空值补齐；GUI 保存环境变量时会同步写回该文件。
-最低字段的名称和 Markdown 获取说明统一记录在 `runtime_paths.py` 的 JSON 兼容列表中。首次打开 GUI 时，如果这四个字段全部为空，程序会自动跳转到环境变量页，并显示黄色配置提醒；`BAIDU_APP_ID` 和 `BAIDU_APP_KEY` 会作为同一组凭证展示。
+最低字段的名称和 Markdown 获取说明统一记录在 `runtime_paths.py` 的 JSON 兼容列表中。首次打开 GUI 时，如果这四个字段全部为空，程序会自动跳转到环境变量页，并显示黄色配置提醒；该强制跳转在每次程序运行中只发生一次，之后可以正常返回首页。`BAIDU_APP_ID` 和 `BAIDU_APP_KEY` 会作为同一组凭证展示。
 
 打包版首次启动时，如果 exe 同级没有 `config.json`，程序会将同级
 `tmp/example_config.json` 移动为 `config.json` 后加载。已有 `config.json` 始终优先使用。

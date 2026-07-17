@@ -22,7 +22,7 @@ def register(app) -> None:  # noqa: ARG001
 
     @ui.page("/")
     async def home() -> None:
-        if all_minimum_env_values_empty():
+        if state.consume_initial_env_redirect() and all_minimum_env_values_empty():
             ui.navigate.to("/env")
             return
         ui.page_title("VRCTTP")

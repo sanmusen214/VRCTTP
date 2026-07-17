@@ -31,6 +31,10 @@ _engine_init_lock = threading.Lock()
 _update_info: VersionInfo | None = None
 _update_lock = threading.Lock()
 
+# 每次程序运行只允许触发一次“最低环境变量为空”的首页引导。
+_initial_env_redirect_consumed = False
+_initial_env_redirect_lock = threading.Lock()
+
 
 def init(engine: PipelineEngine) -> None:
     """初始化全局引擎引用，由 create_app() 调用一次。"""
@@ -75,3 +79,13 @@ def set_update_info(info: VersionInfo) -> None:
 def get_update_info() -> VersionInfo | None:
     with _update_lock:
         return _update_info
+
+
+def consume_initial_env_redirect() -> bool:
+    """首次调用返回 True，之后返回 False；用于一次性启动跳转。"""
+    global _initial_env_redirect_consumed
+    with _initial_env_redirect_lock:
+        if _initial_env_redirect_consumed:
+            return False
+        _initial_env_redirect_consumed = True
+        return True
