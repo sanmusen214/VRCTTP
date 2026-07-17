@@ -89,6 +89,14 @@ BAIDU_APP_KEY=your-baidu-app-key
 打包版首次启动时，如果 exe 同级没有 `config.json`，程序会将同级
 `tmp/example_config.json` 移动为 `config.json` 后加载。已有 `config.json` 始终优先使用。
 
+## 🔄 软件更新
+
+程序版本以 `version.py` 的 `version_str` 为唯一来源。启动时会同步 exe 同级
+`settings/software_config.json` 的 `NOWVERSION`，并在后台检查最新 Release。发现更新后，首页会自动弹出更新说明；关闭弹窗后仍可点击顶部带边框动画的橙色新版本提示重新打开。点击“立即更新”会启动同目录的 `VRCTTP_UPDATE.exe`。
+
+正式打包目录内主程序固定命名为 `VRCTTP.exe`，更新器固定命名为 `VRCTTP_UPDATE.exe`，以便更新器稳定定位和替换主程序。
+`package.py` 还会使用 `zipfile` 将更新器单独打包为同目录的 `VRCTTP{版本号}_update.zip`；压缩包内部文件名保持为 `VRCTTP_UPDATE.exe`。
+
 或者请前往 [火山引擎-豆包语音](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) 注册并开通 语音识别 与 机器翻译服务，并填写相关火山引擎密钥（新版控制台）`VOLC_API_KEY`
 
 ✨ 如果你有想要使用的语音识别或翻译模块，欢迎根据 ai_documents 文档指引，进行模块的搭建，测试以及pr。 ✨

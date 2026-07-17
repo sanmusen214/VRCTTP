@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.engine import PipelineEngine
+    from update import VersionInfo
 
 MAX_OUTPUT_LINES = 200
 
@@ -25,6 +26,10 @@ output_lock = threading.Lock()
 _engine_init_status: str = "initializing"   # "initializing" | "ready" | "error"
 _engine_init_error: str = ""
 _engine_init_lock = threading.Lock()
+
+# 后台更新检测结果（None 表示尚未完成或检测失败）
+_update_info: VersionInfo | None = None
+_update_lock = threading.Lock()
 
 
 def init(engine: PipelineEngine) -> None:
@@ -59,3 +64,14 @@ def get_engine_init_status() -> tuple[str, str]:
     """返回 (status, error_msg)，status 为 'initializing' | 'ready' | 'error'。"""
     with _engine_init_lock:
         return _engine_init_status, _engine_init_error
+
+
+def set_update_info(info: VersionInfo) -> None:
+    global _update_info
+    with _update_lock:
+        _update_info = info
+
+
+def get_update_info() -> VersionInfo | None:
+    with _update_lock:
+        return _update_info

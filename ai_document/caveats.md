@@ -99,6 +99,15 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 
 最低环境变量的名称、中文作用和 Markdown 获取说明统一维护在 `runtime_paths.py` 的 `MINIMUM_ENV_KEYS` JSON 兼容列表中。新增最低字段时不要只修改 GUI；更新该列表即可让文件补齐、空值判断和提醒内容共享同一数据源。字段提醒会按第一个 `_` 之前的前缀自动分组。
 
+### 版本与更新器
+
+- 只在 `version.py` 修改 `version_str`，不要在 `package.py` 或 GUI 再维护独立版本号。
+- `settings/software_config.json` 位于应用目录，主程序启动时会同步 `NOWVERSION` 并保留 `SEC_KEY_M`、`ENCRYPT_KEY` 等更新源配置。
+- 在线检查在后台线程运行；网络失败只记录日志，不阻止主程序工作。
+- 更新按钮只启动应用目录中的 `VRCTTP_UPDATE.exe`，不会在主进程内覆盖文件。
+- 发布包必须同时包含固定名称的 `VRCTTP.exe` 和 `VRCTTP_UPDATE.exe`。`package.py` 会依次使用 `main.spec` 与 `update.spec` 构建，并在重命名最终目录前放置两者。
+- 更新器放置完成后，打包脚本会通过 `zipfile` 生成同级 `VRCTTP{version_str}_update.zip`，其中仅包含归档名为 `VRCTTP_UPDATE.exe` 的更新器文件。
+
 ### 队列大小
 
 `pipeline_queue_size` 默认较小，优先保证实时性。如果下游处理太慢，队列满时框架会清空旧包再塞入新包，避免延迟堆积。

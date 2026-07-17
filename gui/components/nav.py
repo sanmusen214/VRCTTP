@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from nicegui import app, ui
 from gui.state import get_engine
 
@@ -18,7 +20,10 @@ _PAGES = [
 ]
 
 
-def create_nav(title: str = "VRCTTP 实时翻译 群号 964670098") -> None:
+def create_nav(
+    title: str = "VRCTTP 实时翻译 群号 964670098",
+    right_content: Callable[[], None] | None = None,
+) -> None:
     """在当前页面顶部渲染导航栏（含深色/浅色切换开关）。"""
     dark = ui.dark_mode()
     engine = get_engine()
@@ -48,6 +53,8 @@ def create_nav(title: str = "VRCTTP 实时翻译 群号 964670098") -> None:
             for label, href in _PAGES:
                 ui.link(label, href).classes("text-white")
         with ui.row().classes("items-center gap-2"):
+            if right_content is not None:
+                right_content()
             ui.label("深色").classes("text-sm text-white")
             ui.switch(
                 "",

@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import os
+import subprocess
 from urllib.parse import quote
 
 from nicegui import app as nicegui_app, ui
@@ -12,6 +14,8 @@ from nicegui import app as nicegui_app, ui
 import gui.state as state
 from gui.components.nav import create_nav
 from runtime_paths import all_minimum_env_values_empty
+from runtime_paths import application_dir
+from version import version_str
 
 
 def register(app) -> None:  # noqa: ARG001
@@ -22,10 +26,77 @@ def register(app) -> None:  # noqa: ARG001
             ui.navigate.to("/env")
             return
         ui.page_title("VRCTTP")
-        create_nav()
         engine = state.get_engine()
 
+        updater_path = os.path.join(application_dir(), "VRCTTP_UPDATE.exe")
+        update_dialog = ui.dialog()
+        with update_dialog, ui.card().classes("w-full").style("max-width: 680px"):
+            ui.label("发现新版本").classes("text-h5 text-orange-9")
+            update_version_label = ui.label().classes("text-subtitle1 text-bold")
+            update_release_notes = ui.markdown("").classes("w-full")
+            with ui.row().classes("justify-end w-full gap-2"):
+                ui.button("稍后再说", on_click=update_dialog.close).props("flat")
+
+                def _launch_updater() -> None:
+                    if not os.path.isfile(updater_path):
+                        ui.notify(f"找不到更新器：{updater_path}", type="negative")
+                        return
+                    try:
+                        subprocess.Popen(
+                            [updater_path],
+                            cwd=application_dir(),
+                            creationflags=subprocess.CREATE_NEW_CONSOLE,
+                            close_fds=True,
+                        )
+                        ui.notify("更新器已启动，请按更新器提示操作", type="positive")
+                    except Exception as exc:
+                        ui.notify(f"启动更新器失败：{exc}", type="negative")
+
+                ui.button("立即更新", icon="system_update_alt", on_click=_launch_updater, color="orange")
+
+        ui.add_css("""
+        @keyframes update-border-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, .7); }
+          50% { box-shadow: 0 0 0 5px rgba(255, 152, 0, 0); }
+        }
+        .update-available-badge {
+          border: 2px solid #ff9800 !important;
+          border-radius: 6px !important;
+          animation: update-border-pulse 1.6s ease-in-out infinite;
+        }
+        """)
+
+        update_badge = None
+
+        def _render_update_badge() -> None:
+            nonlocal update_badge
+            update_badge = ui.button(
+                "发现新版本",
+                icon="system_update_alt",
+                on_click=update_dialog.open,
+                color="orange",
+            ).props("dense no-caps").classes("update-available-badge")
+            update_badge.set_visibility(False)
+
+        create_nav(right_content=_render_update_badge)
+
+        update_dialog_opened = False
+
+        def _refresh_update_notice() -> None:
+            nonlocal update_dialog_opened
+            info = state.get_update_info()
+            if info is None or not info.has_new_version or update_badge is None:
+                return
+            update_version_label.set_text(f"最新版本：{info.version_str}")
+            update_release_notes.set_content(info.update_body_text or "暂无更新说明。")
+            update_badge.set_text(f"新版本 {info.version_str}")
+            update_badge.set_visibility(True)
+            if not update_dialog_opened:
+                update_dialog_opened = True
+                update_dialog.open()
+
         with ui.column().classes("w-full max-w-4xl mx-auto q-pa-md gap-4"):
+            ui.label(f"VRCTTP 当前版本：{version_str}").classes("text-h4 text-bold")
             ui.label("管道状态").classes("text-h5")
 
             init_banner = ui.column().classes("w-full")
@@ -148,3 +219,4 @@ def register(app) -> None:  # noqa: ARG001
                 ui.button("重载所有配置", on_click=_reload_all, color="primary")
 
             ui.timer(5.0, refresh)
+            ui.timer(1.0, _refresh_update_notice)

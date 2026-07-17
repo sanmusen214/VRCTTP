@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import json
 
 # JSON-compatible list: keep this as plain dict/list/string data so it can also
 # be serialized directly for future GUI/API use.
@@ -111,3 +112,27 @@ def default_config_path() -> str:
         if os.path.isfile(example):
             shutil.move(example, config)
     return config
+
+
+def software_config_path() -> str:
+    return os.path.join(application_dir(), "settings", "software_config.json")
+
+
+def sync_software_version(version: str, path: str | None = None) -> str:
+    """确保软件配置存在，并把 NOWVERSION 同步为当前程序版本。"""
+    path = path or software_config_path()
+    config: dict = {}
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            loaded = {}
+        if isinstance(loaded, dict):
+            config = loaded
+    if config.get("NOWVERSION") != version:
+        config["NOWVERSION"] = version
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+    return path

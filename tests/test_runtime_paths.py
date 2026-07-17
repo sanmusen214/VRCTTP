@@ -1,4 +1,5 @@
 import os
+import json
 
 import runtime_paths
 
@@ -44,3 +45,26 @@ def test_default_config_moves_example_next_to_application(monkeypatch, tmp_path)
     assert result == os.fspath(tmp_path / "config.json")
     assert (tmp_path / "config.json").read_text(encoding="utf-8") == '{"modules": {}}'
     assert not example.exists()
+
+
+def test_sync_software_version_updates_nowversion_and_preserves_fields(tmp_path):
+    path = tmp_path / "settings" / "software_config.json"
+    path.parent.mkdir()
+    path.write_text(
+        json.dumps({"NOWVERSION": "0.1.0", "SEC_KEY_M": "keep"}),
+        encoding="utf-8",
+    )
+
+    runtime_paths.sync_software_version("0.4.0", str(path))
+    result = json.loads(path.read_text(encoding="utf-8"))
+
+    assert result["NOWVERSION"] == "0.4.0"
+    assert result["SEC_KEY_M"] == "keep"
+
+
+def test_sync_software_version_creates_settings_file(tmp_path):
+    path = tmp_path / "settings" / "software_config.json"
+
+    runtime_paths.sync_software_version("0.4.0", str(path))
+
+    assert json.loads(path.read_text(encoding="utf-8"))["NOWVERSION"] == "0.4.0"

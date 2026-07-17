@@ -3,6 +3,7 @@
 *.spec
 .ignore/
 /models/
+/settings/
 # Python 缓存文件
 __pycache__/
 *.py[cod]
@@ -33,3 +34,4 @@ coverage
 
 # 不忽略 main.spec
 !main.spec
+!update.spec

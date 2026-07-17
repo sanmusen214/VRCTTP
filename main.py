@@ -22,7 +22,8 @@ import sys
 import threading
 import time
 
-from runtime_paths import default_config_path, ensure_minimum_env_file
+from runtime_paths import default_config_path, ensure_minimum_env_file, sync_software_version
+from version import version_str
 
 # 尽早创建/补齐 .env；即使 python-dotenv 未安装，GUI 也有完整最低字段可编辑
 _env_path = ensure_minimum_env_file()
@@ -104,6 +105,8 @@ def _start_gui(engine, host: str, port: int, show: bool = False) -> threading.Th
 
 
 def main() -> None:
+    # 更新器读取这份配置判断本地版本；实际启动时以 version.py 为准同步。
+    sync_software_version(version_str)
     parser = argparse.ArgumentParser(
         description="VRChat 实时翻译流",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -162,6 +165,18 @@ def main() -> None:
     gui_cfg = engine.get_gui_config()
     gui_enabled = gui_cfg.get("enabled", True) and not args.no_gui
     if gui_enabled:
+        import gui.state as _gui_state
+
+        def _check_for_updates() -> None:
+            try:
+                from update import whether_has_new_version
+                _gui_state.set_update_info(whether_has_new_version())
+            except Exception:
+                logger.exception("检查软件更新失败")
+
+        threading.Thread(
+            target=_check_for_updates, name="update-check", daemon=True
+        ).start()
         gui_host = gui_cfg.get("host", "0.0.0.0")
         gui_port = int(gui_cfg.get("port", 8080))
         try:

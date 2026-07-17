@@ -21,6 +21,9 @@
 vrc_realtime_translate/
 ├── main.py              # 程序入口，解析 CLI，启动 GUI 和管道引擎
 ├── runtime_paths.py     # exe/源码运行目录、.env 与默认配置初始化
+├── version.py           # 当前软件版本唯一来源
+├── update.py            # 在线版本检查和独立更新器逻辑
+├── update.spec          # 更新器 PyInstaller 配置
 ├── config.json          # 运行配置：模块注册表 + 管道路由
 ├── core/                # 框架核心：包、模块基类、管道、引擎
 ├── modules/             # 业务模块：音频、输入、识别/翻译、过滤、消费
@@ -44,9 +47,18 @@ python main.py --list-devices         # 列出音频设备后退出
 1. 确定应用目录：打包版为 exe 所在目录，源码版为项目目录。
 2. 在应用目录创建或补齐 `.env` 的最低字段，并加载环境变量。
 3. 优先加载应用目录的 `config.json`；不存在时，将 `tmp/example_config.json` 移动为同级 `config.json` 后加载。
-4. 创建 GUI 应用并注册页面。
-5. 后台构建并启动所有启用的 pipeline。
-6. 每个模块在独立后台线程中处理自己的输入队列，退出时停止管道并释放资源。
+4. 将 `version.py` 的版本同步到 `settings/software_config.json`，并在后台检查更新。
+5. 创建 GUI 应用并注册页面。
+6. 后台构建并启动所有启用的 pipeline。
+7. 每个模块在独立后台线程中处理自己的输入队列，退出时停止管道并释放资源。
+
+## 版本与更新
+
+`version.py` 的 `version_str` 是主程序、打包脚本和更新检查使用的当前版本。启动时若应用目录下 `settings/software_config.json` 的 `NOWVERSION` 不同，程序会保留其他配置字段并更新该值；文件或目录不存在时会自动创建。
+
+更新检查调用 `update.py` 的 `whether_has_new_version()`，在守护线程中执行以避免阻塞 GUI。发现新版本后由首页展示弹窗和持久的顶部更新入口。更新操作由应用目录下独立的 `VRCTTP_UPDATE.exe` 执行。
+
+打包时还会把该更新器压缩为 `VRCTTP{版本号}_update.zip` 并放在主程序 exe 同级目录。压缩包中保留固定文件名 `VRCTTP_UPDATE.exe`。
 
 ## 数据流模型
 

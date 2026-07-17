@@ -24,7 +24,8 @@ gui/
 2. `gui.create_app(engine)` 保存全局 engine 引用。
 3. GUI 注册 `TerminalConsumer` 回调，用于将输出写入 `state.output_buffer`。
 4. NiceGUI 启动 Web 服务；若 `.env` 的最低字段全部为空，首页自动跳转到 `/env`。
-5. 后台线程构建并启动管道，不阻塞页面打开。
+5. 后台更新检查完成后将结果写入共享状态，首页定时读取但不阻塞页面打开。
+6. 后台线程构建并启动管道，不阻塞页面打开。
 
 `ui.run()` 需要 `storage_secret`，否则用户级 storage 不能保存深色模式偏好。
 
@@ -71,6 +72,9 @@ gui/
 
 功能：
 
+- 主内容区域首行显示 `version.py` 中的当前版本号。
+- 发现新版本时自动弹出更新说明弹窗，“立即更新”按钮启动 exe 同级 `VRCTTP_UPDATE.exe`。
+- 用户关闭弹窗后，导航栏右上角保留橙色新版本矩形提示，并以边框脉冲动画吸引注意；点击可重新打开弹窗。
 - 显示 engine 初始化状态。
 - 显示所有 pipeline 的启用状态和运行状态。
 - 切换 pipeline 的 `enabled` 字段。
