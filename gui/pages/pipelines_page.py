@@ -135,7 +135,7 @@ def _build_route_graph_editor_html(
   }}
   #{editor_id} .route-canvas-wrap {{
     position: relative;
-    height: 460px;
+    height: 620px;
     overflow: auto;
     background:
       linear-gradient(#edf0f3 1px, transparent 1px),
@@ -145,15 +145,15 @@ def _build_route_graph_editor_html(
   #{editor_id} .route-canvas {{
     position: relative;
     min-width: 1100px;
-    min-height: 720px;
+    min-height: 880px;
   }}
   #{editor_id} .route-lines {{
     position: absolute;
     inset: 0;
     min-width: 1100px;
-    min-height: 720px;
+    min-height: 880px;
     width: 1100px;
-    height: 720px;
+    height: 880px;
     pointer-events: auto;
     z-index: 3;
   }}
@@ -708,7 +708,7 @@ def register(app) -> None:  # noqa: ARG001
 
                                         def _make_delete_btn(pipeline_id: str):
                                             def _open_delete() -> None:
-                                                with ui.dialog() as dlg, ui.card():
+                                                with ui.dialog() as dlg, ui.card().classes("w-full").style("width:min(900px, 92vw); max-width:900px"):
                                                     ui.label(f"确认删除管道 {pipeline_id!r}？").classes("text-bold")
                                                     ui.label("操作不可撤销，管道将从配置文件中移除。").classes("text-caption text-grey")
                                                     with ui.row():
@@ -788,7 +788,7 @@ def register(app) -> None:  # noqa: ARG001
                     routes=existing_routes,
                 ))
 
-                with ui.dialog() as edit_dlg, ui.card().classes("w-full").style("min-width:780px; max-width:1120px"):
+                with ui.dialog() as edit_dlg, ui.card().classes("w-full").style("width:min(1320px, 96vw); max-width:1320px"):
                     ui.label(f"编辑管道: {pipeline_id}").classes("text-h6")
                     ui.label(f"ID: {pipeline_id}（不可修改）").classes("text-caption text-grey")
 
@@ -894,7 +894,7 @@ def register(app) -> None:  # noqa: ARG001
                     routes={},
                 ))
 
-                with ui.dialog() as dlg, ui.card().classes("w-full").style("min-width:780px; max-width:1120px"):
+                with ui.dialog() as dlg, ui.card().classes("w-full").style("width:min(1320px, 96vw); max-width:1320px"):
                     ui.label("新建管道").classes("text-h6")
 
                     with ui.grid(columns=2).classes("w-full gap-2"):

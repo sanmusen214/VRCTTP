@@ -30,7 +30,7 @@ def register(app) -> None:  # noqa: ARG001
 
         updater_path = os.path.join(application_dir(), "VRCTTP_UPDATE.exe")
         update_dialog = ui.dialog()
-        with update_dialog, ui.card().classes("w-full").style("max-width: 680px"):
+        with update_dialog, ui.card().classes("w-full").style("width:min(980px, 92vw); max-width:980px"):
             ui.label("发现新版本").classes("text-h5 text-orange-9")
             update_version_label = ui.label().classes("text-subtitle1 text-bold")
             update_release_notes = ui.markdown("").classes("w-full")

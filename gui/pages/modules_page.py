@@ -142,7 +142,7 @@ def register(app) -> None:  # noqa: ARG001
                                 def _make_delete(rid: str, current_name: str):
                                     def _do_delete() -> None:
                                         using = _pipelines_using(rid, pipelines_list)
-                                        with ui.dialog() as dlg, ui.card():
+                                        with ui.dialog() as dlg, ui.card().classes("w-full").style("width:min(900px, 92vw); max-width:900px"):
                                             ui.label(f"确认删除模块实例 {current_name!r}？").classes(
                                                 "text-bold"
                                             )
@@ -167,7 +167,7 @@ def register(app) -> None:  # noqa: ARG001
                                             return
                                         config_attrs = cls.get_config_attributes()
                                         edit_elements: dict = {}
-                                        with ui.dialog() as edit_dlg, ui.card().classes("w-full").style("min-width:480px"):
+                                        with ui.dialog() as edit_dlg, ui.card().classes("w-full").style("width:min(1050px, 92vw); max-width:1050px"):
                                             ui.label(f"编辑模块: {current_name}  [{mtype}]").classes("text-h6")
                                             name_input = ui.input(
                                                 label="* 显示名称", value=current_name,
