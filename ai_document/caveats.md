@@ -93,6 +93,12 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 
 ## 运行时注意事项
 
+### 应用目录中的可写配置
+
+打包版的 `.env`、`config.json` 和 `tmp/` 都以 exe 所在目录为基准，不要把可编辑文件放进 `_internal`。发布包仅携带 `tmp/example_config.json`；首次启动会把它移动成 exe 同级的 `config.json`。因此程序目录必须对当前用户可写。
+
+最低环境变量的名称、中文作用和 Markdown 获取说明统一维护在 `runtime_paths.py` 的 `MINIMUM_ENV_KEYS` JSON 兼容列表中。新增最低字段时不要只修改 GUI；更新该列表即可让文件补齐、空值判断和提醒内容共享同一数据源。字段提醒会按第一个 `_` 之前的前缀自动分组。
+
 ### 队列大小
 
 `pipeline_queue_size` 默认较小，优先保证实时性。如果下游处理太慢，队列满时框架会清空旧包再塞入新包，避免延迟堆积。

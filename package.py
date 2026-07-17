@@ -6,15 +6,13 @@ package.py — VRCTTP 打包脚本
 
 流程：
     1. 使用 PyInstaller + main.spec 构建程序
-    2. 净化 .env（将所有值替换为键名，防止密钥泄露），复制到 dist/main/_internal/
-    3. 将 config.json 复制到打包目录根（dist/main/）
-    4. 在 dist/main/ 内创建空的 models 文件夹（用于放置本地语音识别模型）
-    5. 将主程序 dist/main/main.exe 重命名为 VRCTTP v{VERSION}.exe
-    6. 将输出文件夹 dist/main 重命名为 dist/VRCTTP
+    2. 将 config.json 复制为 dist/main/tmp/example_config.json
+    3. 在 dist/main/ 内创建空的 models 文件夹（用于放置本地语音识别模型）
+    4. 将主程序 dist/main/main.exe 重命名为 VRCTTP v{VERSION}.exe
+    5. 将输出文件夹 dist/main 重命名为 dist/VRCTTP
 """
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -25,10 +23,8 @@ VERSION = "0.3.0"
 # ── 路径常量 ──────────────────────────────────────────────────────────────
 ROOT_DIR      = os.path.dirname(os.path.abspath(__file__))
 SPEC_FILE     = os.path.join(ROOT_DIR, "main.spec")
-ENV_SRC       = os.path.join(ROOT_DIR, ".env")
 CONFIG_SRC    = os.path.join(ROOT_DIR, "config.json")
 DIST_MAIN     = os.path.join(ROOT_DIR, "dist", "main")
-INTERNAL_DIR  = os.path.join(DIST_MAIN, "_internal")
 MODELS_DIR    = os.path.join(DIST_MAIN, "models")
 SRC_EXE       = os.path.join(DIST_MAIN, "main.exe")
 DST_EXE       = os.path.join(DIST_MAIN, f"VRCTTP v{VERSION}.exe")
@@ -52,54 +48,21 @@ def build() -> None:
     print("✅ 打包完成")
 
 
-# ── Step 2: 净化 .env 并复制 ─────────────────────────────────────────────
-
-def _sanitize_env(src_path: str) -> str:
-    """
-    读取 .env 文件，将所有赋值行的值替换为键名（防止密钥泄露）。
-    注释行和空行原样保留。
-    返回处理后的内容字符串。
-    """
-    lines_out = []
-    with open(src_path, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.rstrip("\n")
-            # 赋值行：KEY=VALUE（允许 KEY 为空值）
-            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)', stripped)
-            if m:
-                key = m.group(1)
-                lines_out.append(f"{key}={key}\n")
-            else:
-                lines_out.append(line if line.endswith("\n") else line + "\n")
-    return "".join(lines_out)
-
-
-def copy_env() -> None:
-    step("净化 .env 并复制到 _internal/")
-    if not os.path.isfile(ENV_SRC):
-        print("⚠  未找到 .env 文件，跳过")
-        return
-    os.makedirs(INTERNAL_DIR, exist_ok=True)
-    sanitized = _sanitize_env(ENV_SRC)
-    dst = os.path.join(INTERNAL_DIR, ".env")
-    with open(dst, "w", encoding="utf-8") as f:
-        f.write(sanitized)
-    print(f"✅ 净化后的 .env 已写入: {dst}")
-
-
-# ── Step 3: 复制 config.json ─────────────────────────────────────────────
+# ── Step 2: 复制默认配置模板 ─────────────────────────────────────────────
 
 def copy_config() -> None:
-    step("复制 config.json 到打包目录")
+    step("复制 config.json 为首次启动模板")
     if not os.path.isfile(CONFIG_SRC):
         print("⚠  未找到 config.json，跳过")
         return
-    dst = os.path.join(DIST_MAIN, "config.json")
+    tmp_dir = os.path.join(DIST_MAIN, "tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+    dst = os.path.join(tmp_dir, "example_config.json")
     shutil.copy2(CONFIG_SRC, dst)
     print(f"✅ config.json 已复制到: {dst}")
 
 
-# ── Step 4: 创建空 models 文件夹 ──────────────────────────────────────────
+# ── Step 3: 创建空 models 文件夹 ──────────────────────────────────────────
 
 def create_models_dir() -> None:
     step("创建空的 models 文件夹")
@@ -142,7 +105,6 @@ def rename_dist_folder() -> None:
 
 if __name__ == "__main__":
     build()
-    copy_env()
     copy_config()
     create_models_dir()
     rename_exe()

@@ -22,11 +22,15 @@ import sys
 import threading
 import time
 
-# 尽早加载 .env 文件，使 ${ENV_VAR} 占位符在配置解析前已注入环境变量
+from runtime_paths import default_config_path, ensure_minimum_env_file
+
+# 尽早创建/补齐 .env；即使 python-dotenv 未安装，GUI 也有完整最低字段可编辑
+_env_path = ensure_minimum_env_file()
+
+# 加载 .env 文件，使 ${ENV_VAR} 占位符在配置解析前已注入环境变量
 try:
     from dotenv import load_dotenv
 
-    _env_path = os.path.join(os.path.dirname(__file__), ".env")
     if load_dotenv(_env_path, override=False):
         # override=False：已存在的系统环境变量优先，.env 仅补充缺失项
         print(f"[dotenv] 已加载: {_env_path}", flush=True)
@@ -105,7 +109,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--config", default="config.json",
+        "--config", default=None,
         help="配置文件路径（默认: config.json）"
     )
     parser.add_argument(
@@ -133,7 +137,8 @@ def main() -> None:
     # 导入引擎
     from core.engine import PipelineEngine
 
-    engine = PipelineEngine(config_path=args.config)
+    config_path = args.config if args.config is not None else default_config_path()
+    engine = PipelineEngine(config_path=config_path)
 
     # 优雅退出处理
     stop_event = threading.Event()

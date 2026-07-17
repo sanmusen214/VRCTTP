@@ -11,12 +11,16 @@ from nicegui import app as nicegui_app, ui
 
 import gui.state as state
 from gui.components.nav import create_nav
+from runtime_paths import all_minimum_env_values_empty
 
 
 def register(app) -> None:  # noqa: ARG001
 
     @ui.page("/")
     async def home() -> None:
+        if all_minimum_env_values_empty():
+            ui.navigate.to("/env")
+            return
         ui.page_title("VRCTTP")
         create_nav()
         engine = state.get_engine()

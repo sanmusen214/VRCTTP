@@ -1,7 +1,7 @@
 """
-环境变量编辑页面 — 读写项目根目录的 .env 文件。
+环境变量编辑页面 — 读写应用程序（exe）同级目录的 .env 文件。
 
-注意：修改 .env 后需重启服务才能让引擎感知（${VAR} 替换在启动时完成）。
+保存后会同步当前进程并热重载配置。
 """
 from __future__ import annotations
 
@@ -10,9 +10,13 @@ from nicegui import ui
 
 import gui.state as state
 from gui.components.nav import create_nav
+from runtime_paths import (
+    all_minimum_env_values_empty,
+    env_path,
+    grouped_minimum_env_help,
+    minimum_env_key_names,
+)
 
-# .env 文件路径
-_ENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
 _SENSITIVE_KEYWORDS = ("key", "secret", "token", "password", "pass", "pwd")
 
 
@@ -84,15 +88,29 @@ def register(app) -> None:  # noqa: ARG001
         create_nav()
         engine = state.get_engine()
 
-        env_path = os.path.abspath(_ENV_PATH)
-        header_lines, kv_pairs = _read_env_file(env_path)
+        current_env_path = env_path()
+        header_lines, kv_pairs = _read_env_file(current_env_path)
+        minimum_keys = minimum_env_key_names()
+        existing_keys = {key for key, _ in kv_pairs}
+        kv_pairs.extend((key, "") for key in minimum_keys if key not in existing_keys)
 
         # kv_list: mutable list of [key, value] — source of truth for the editor
         kv_list: list[list[str]] = [[k, v] for k, v in kv_pairs]
 
         with ui.column().classes("w-full max-w-3xl mx-auto q-pa-md gap-4"):
+            if all_minimum_env_values_empty(current_env_path):
+                with ui.card().classes("w-full bg-amber-1 q-pa-md"):
+                    with ui.row().classes("items-start gap-2 no-wrap"):
+                        ui.icon("warning", color="amber-9").classes("q-mt-xs")
+                        with ui.column().classes("gap-2"):
+                            ui.label("尚未配置服务凭证").classes("text-bold text-amber-10")
+                            ui.label("请根据下面的获取方法填写至少一组环境变量：").classes("text-amber-10")
+                            for help_item in grouped_minimum_env_help():
+                                ui.markdown(
+                                    f"**{help_item['keys']}**  \n{help_item['description']}"
+                                ).classes("text-amber-10")
             ui.label("环境变量编辑").classes("text-h5")
-            ui.label(f"文件路径: {env_path}").classes("text-caption text-grey font-mono")
+            ui.label(f"文件路径: {current_env_path}").classes("text-caption text-grey font-mono")
             ui.label(
                 "保存后会立即写入当前进程环境变量，并热重载配置让 ${VAR} 占位符生效。"
             ).classes("text-caption text-grey")
@@ -164,7 +182,9 @@ def register(app) -> None:  # noqa: ARG001
             def _save() -> None:
                 try:
                     new_pairs = [(row[0], row[1]) for row in kv_list]
-                    _write_env_file(env_path, header_lines, new_pairs)
+                    present = {key for key, _ in new_pairs}
+                    new_pairs.extend((key, "") for key in minimum_keys if key not in present)
+                    _write_env_file(current_env_path, header_lines, new_pairs)
                     _apply_env_to_process(kv_pairs, new_pairs)
                     engine.reload_config()
                     kv_pairs[:] = new_pairs

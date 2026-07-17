@@ -105,6 +105,24 @@ GUI 中模块会按管道流向分组展示和选择：
 
 ## 环境变量占位符
 
+默认 `.env` 位于应用目录：打包运行时与 exe 同级，源码运行时位于项目根目录，不读取 PyInstaller 的 `_internal/.env`。程序内置以下最低字段，文件不存在时会创建，已有文件缺字段时会以空值补齐，同时保留原有字段和值：
+
+- `VOLC_API_KEY`
+- `BAIDU_APP_ID`
+- `BAIDU_APP_KEY`
+- `llm_api_key`
+
+这些字段不是单纯的字符串元组，而是记录在 `runtime_paths.py` 的 JSON 兼容列表 `MINIMUM_ENV_KEYS` 中。每一项包含：
+
+```json
+{
+  "key": "字段名称",
+  "description": "中文作用与获取方法（Markdown）"
+}
+```
+
+补齐 `.env`、判断首次配置状态以及 GUI 获取说明均使用这份元数据。GUI 展示提醒时按字段名第一个 `_` 之前的部分分组，因此 `BAIDU_APP_ID` 和 `BAIDU_APP_KEY` 会合并为 `BAIDU_APP_ID / BAIDU_APP_KEY` 一组。
+
 普通配置字符串支持 `${ENV_VAR}`：
 
 ```json
@@ -114,6 +132,12 @@ GUI 中模块会按管道流向分组展示和选择：
 如果环境变量不存在，engine 会保留原占位符并记录 warning。
 
 在 GUI `/env` 页面保存 `.env` 时，变量会立即写入当前进程环境，并触发 `engine.reload_config()`。因此普通配置中的 `${ENV_VAR}` 可以不重启应用直接应用到重新构建后的管道。
+
+## 默认配置初始化
+
+未传入 `--config` 时，程序使用应用目录下的 `config.json`。如果该文件不存在，则将应用目录下的 `tmp/example_config.json` 重命名并移动到同级 `config.json`，随后读取它。若两者都不存在，配置加载会明确失败。显式传入 `--config` 时不执行这套默认模板逻辑。
+
+`package.py` 不再复制或净化 `.env`；它会把项目根目录的 `config.json` 复制到打包结果的 `tmp/example_config.json`，因此 `tmp` 与 exe 同级。
 
 `llm_openai_api_call` 的 `headers_b64` 和 `payload_b64` 是 base64 字符串，engine 不会看到里面的 `${llm_api_key}`；该模块会在运行时解码后自行替换。
 
