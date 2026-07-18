@@ -10,16 +10,16 @@ import json
 # be serialized directly for future GUI/API use.
 MINIMUM_ENV_KEYS = [
     {
-        "key": "VOLC_API_KEY",
-        "description": "用于 火山引擎语音识别 和 火山机器翻译 模块的密钥。前往 [火山引擎豆包语音控制台](https://console.volcengine.com/speech/new/setting/activate?projectName=default) 开通【大模型-机器翻译】和【大模型-流式语音识别2.0】服务并在 [API管理页面](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) 获取 API Key。",
-    },
-    {
         "key": "BAIDU_APP_ID",
         "description": "百度翻译模块 所需的凭证之一。前往 [百度翻译开放平台](https://fanyi-api.baidu.com/manage/developer)完成开发者认证并开通【[通用文本翻译](https://fanyi-api.baidu.com/choose)】后，在[管理控制台](https://fanyi-api.baidu.com/manage/developer)页面上方获取 APP ID。",
     },
     {
         "key": "BAIDU_APP_KEY",
         "description": "百度翻译模块 所需的凭证之一。与 `BAIDU_APP_ID` 配套使用，可在百度翻译开放平台的同一应用中获取密钥。",
+    },
+    {
+        "key": "VOLC_API_KEY",
+        "description": "用于 火山引擎语音识别 和 火山机器翻译 模块的密钥。前往 [火山引擎豆包语音控制台](https://console.volcengine.com/speech/new/setting/activate?projectName=default) 开通【大模型-机器翻译】和【大模型-流式语音识别2.0】服务并在 [API管理页面](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) 获取 API Key。",
     },
     {
         "key": "llm_api_key",
