@@ -125,6 +125,7 @@ def create_update_zip() -> None:
         sys.exit(f"❌ 找不到待压缩的更新器 {DST_UPDATE_EXE}")
     with zipfile.ZipFile(UPDATE_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(DST_UPDATE_EXE, arcname="VRCTTP_UPDATE.exe")
+        archive.write(DST_EXE, arcname="VRCTTP.exe")
     print(f"✅ 更新压缩包已创建: {UPDATE_ZIP}")
 
 
