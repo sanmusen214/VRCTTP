@@ -167,7 +167,8 @@ def _build_route_graph_editor_html(
     border-radius: 8px;
     background: white;
     box-shadow: 0 2px 8px rgba(21, 30, 45, 0.11);
-    z-index: 4;
+    z-index: 10;
+    overflow: visible;
     padding: 9px 26px 15px 12px;
     cursor: move;
     user-select: none;
@@ -206,6 +207,8 @@ def _build_route_graph_editor_html(
   }}
   #{editor_id} .route-port {{
     position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
     left: calc(50% - 6px);
     width: 12px;
     height: 12px;
