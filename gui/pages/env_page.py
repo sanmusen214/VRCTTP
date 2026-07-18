@@ -11,6 +11,7 @@ from nicegui import ui
 import gui.state as state
 from gui.components.nav import create_nav
 from runtime_paths import (
+    MINIMUM_ENV_KEYS,
     all_minimum_env_values_empty,
     env_path,
     grouped_minimum_env_help,
@@ -91,6 +92,9 @@ def register(app) -> None:  # noqa: ARG001
         current_env_path = env_path()
         header_lines, kv_pairs = _read_env_file(current_env_path)
         minimum_keys = minimum_env_key_names()
+        minimum_descriptions = {
+            item["key"]: item["description"] for item in MINIMUM_ENV_KEYS
+        }
         existing_keys = {key for key, _ in kv_pairs}
         kv_pairs.extend((key, "") for key in minimum_keys if key not in existing_keys)
 
@@ -125,32 +129,38 @@ def register(app) -> None:  # noqa: ARG001
                 for i, pair in enumerate(kv_list):
                     key = pair[0]
                     sensitive = _is_sensitive(key)
-                    with ui.row().classes("items-center w-full gap-2"):
-                        ui.label(key).classes("text-caption text-bold font-mono").style(
-                            "min-width:180px; word-break:break-all"
-                        )
+                    with ui.column().classes("w-full gap-0"):
+                        with ui.row().classes("items-center w-full gap-2"):
+                            ui.label(key).classes("text-caption text-bold font-mono").style(
+                                "min-width:180px; word-break:break-all"
+                            )
 
-                        def _make_on_change(idx: int):
-                            def _on_change(e) -> None:
-                                kv_list[idx][1] = e.value
-                            return _on_change
+                            def _make_on_change(idx: int):
+                                def _on_change(e) -> None:
+                                    kv_list[idx][1] = e.value
+                                return _on_change
 
-                        ui.input(
-                            value=pair[1],
-                            password=sensitive,
-                            password_toggle_button=sensitive,
-                            on_change=_make_on_change(i),
-                        ).classes("flex-grow").style("min-width:200px")
+                            ui.input(
+                                value=pair[1],
+                                password=sensitive,
+                                password_toggle_button=sensitive,
+                                on_change=_make_on_change(i),
+                            ).classes("flex-grow").style("min-width:200px")
 
-                        def _make_delete(idx: int):
-                            def _delete() -> None:
-                                kv_list.pop(idx)
-                                kv_editor.refresh()
-                            return _delete
+                            def _make_delete(idx: int):
+                                def _delete() -> None:
+                                    kv_list.pop(idx)
+                                    kv_editor.refresh()
+                                return _delete
 
-                        ui.button(
-                            icon="delete", color="negative", on_click=_make_delete(i)
-                        ).props("flat round dense")
+                            ui.button(
+                                icon="delete", color="negative", on_click=_make_delete(i)
+                            ).props("flat round dense")
+
+                        if key in minimum_descriptions:
+                            ui.markdown(minimum_descriptions[key]).classes(
+                                "text-caption text-grey-7 q-ml-md q-mb-sm"
+                            ).style("opacity:0.68; font-size:12px; line-height:1.45")
 
             kv_editor()
 

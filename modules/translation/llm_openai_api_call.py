@@ -80,9 +80,9 @@ def _default_payload_text() -> str:
                     {
                         "type": "input_text",
                         "text": (
-                            "You are a skilled translator. Translate the following "
-                            "text and return only the translation result, with no "
-                            "explanation:\n%{original}"
+                            "你是一个日常对话翻译专家， "
+                            "接下来将以下内容翻译为日文，只需要翻译结果，不需要任何解释或目标语言标签，"
+                            "严格遵守指令，翻译以下内容:\n%{original}"
                         ),
                     },
                 ],

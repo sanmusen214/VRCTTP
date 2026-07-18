@@ -11,19 +11,19 @@ import json
 MINIMUM_ENV_KEYS = [
     {
         "key": "VOLC_API_KEY",
-        "description": "用于火山引擎语音识别和机器翻译。前往[火山引擎豆包语音控制台](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default)开通服务并获取 API Key。",
+        "description": "用于 火山引擎语音识别 和 火山机器翻译 模块的密钥。前往 [火山引擎豆包语音控制台](https://console.volcengine.com/speech/new/setting/activate?projectName=default) 开通【大模型-机器翻译】和【大模型-流式语音识别2.0】服务并在 [API管理页面](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) 获取 API Key。",
     },
     {
         "key": "BAIDU_APP_ID",
-        "description": "百度翻译凭证之一。前往[百度翻译开放平台](https://fanyi-api.baidu.com/product/11)完成开发者认证并开通通用文本翻译后，在管理控制台获取 APP ID。",
+        "description": "百度翻译模块 所需的凭证之一。前往 [百度翻译开放平台](https://fanyi-api.baidu.com/manage/developer)完成开发者认证并开通【[通用文本翻译](https://fanyi-api.baidu.com/choose)】后，在[管理控制台](https://fanyi-api.baidu.com/manage/developer)页面上方获取 APP ID。",
     },
     {
         "key": "BAIDU_APP_KEY",
-        "description": "百度翻译凭证之一。与 `BAIDU_APP_ID` 配套使用，可在百度翻译开放平台的同一应用中获取密钥。",
+        "description": "百度翻译模块 所需的凭证之一。与 `BAIDU_APP_ID` 配套使用，可在百度翻译开放平台的同一应用中获取密钥。",
     },
     {
         "key": "llm_api_key",
-        "description": "用于通用 LLM 翻译模块。请在所选 LLM 服务商的控制台创建 API Key，并确保它与模块中配置的 API 地址属于同一服务商。",
+        "description": "用于 语言大模型 模块的密钥。请在所选 LLM 服务商的控制台创建 API Key填入。并检查对应大语言模型请求格式是否一致。默认的请求格式是[火山豆包模型](https://console.volcengine.com/ark/region:cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=model)的。",
     },
 ]
 

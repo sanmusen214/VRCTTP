@@ -184,7 +184,7 @@
       "display_name": "翻译到中文-百度翻译API"
     },
     "mod_82a2acacfaa354f5": {
-      "display_name": "大语言翻译模块（需要密钥）",
+      "display_name": "大语言llm模型模块（可以用作翻译）",
       "type": "llm_openai_api_call",
       "params": {
         "target_language": "to_en_jp",
@@ -195,30 +195,6 @@
     }
   },
   "pipelines": [
-    {
-      "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
-      "id": "mic_volc_streaming",
-      "name": "麦克风中文到英语（流式-火山引擎API）",
-      "enabled": false,
-      "graph": {
-        "entry": "流式麦克风",
-        "routes": {
-          "流式麦克风": [
-            "流式识别-火山豆包API"
-          ],
-          "流式识别-火山豆包API": [
-            "中间件-GUI输入文字"
-          ],
-          "中间件-GUI输入文字": [
-            "mod_82a2acacfaa354f5"
-          ],
-          "mod_82a2acacfaa354f5": [
-            "软件日志输出",
-            "VRChat输出"
-          ]
-        }
-      }
-    },
     {
       "id": "mic_local_stt",
       "name": "麦克风中文到英语&日语（分句-本地识别-百度翻译）",
@@ -264,6 +240,53 @@
             "翻译到中文-百度翻译API"
           ],
           "翻译到中文-百度翻译API": [
+            "软件日志输出",
+            "VRChat输出"
+          ]
+        }
+      }
+    },
+    {
+      "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
+      "id": "mic_volc_streaming",
+      "name": "麦克风中文到英语（流式-火山引擎API）",
+      "enabled": false,
+      "graph": {
+        "entry": "流式麦克风",
+        "routes": {
+          "流式麦克风": [
+            "流式识别-火山豆包API"
+          ],
+          "流式识别-火山豆包API": [
+            "中间件-GUI输入文字"
+          ],
+          "中间件-GUI输入文字": [
+            "mod_82a2acacfaa354f5"
+          ],
+          "mod_82a2acacfaa354f5": [
+            "软件日志输出",
+            "VRChat输出"
+          ]
+        }
+      }
+    },
+    {
+      "id": "mic_local_stt_copy",
+      "name": "麦克风中文到英语&日语（使用LLM大语言模型）",
+      "enabled": false,
+      "graph": {
+        "entry": "分句麦克风",
+        "routes": {
+          "分句麦克风": [
+            "分句识别-本地"
+          ],
+          "分句识别-本地": [
+            "中间件-GUI输入文字"
+          ],
+          "中间件-GUI输入文字": [
+            "mod_82a2acacfaa354f5"
+          ],
+          "mod_82a2acacfaa354f5": [
             "软件日志输出",
             "VRChat输出"
           ]

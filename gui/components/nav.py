@@ -21,7 +21,7 @@ _PAGES = [
 
 
 def create_nav(
-    title: str = "VRCTTP 实时翻译 群号 964670098",
+    title: str = "VRCTTP 实时翻译",
     right_content: Callable[[], None] | None = None,
 ) -> None:
     """在当前页面顶部渲染导航栏（含深色/浅色切换开关）。"""

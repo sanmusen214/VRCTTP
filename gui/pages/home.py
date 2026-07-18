@@ -96,7 +96,10 @@ def register(app) -> None:  # noqa: ARG001
                 update_dialog.open()
 
         with ui.column().classes("w-full max-w-4xl mx-auto q-pa-md gap-4"):
-            ui.label(f"VRCTTP 当前版本：{version_str}").classes("text-h4 text-bold")
+            with ui.column().classes("gap-1"):
+                ui.label(f"VRCTTP 当前版本：{version_str}").classes("text-h4 text-bold")
+                ui.label("QQ 交流群：964670098").classes("text-subtitle1 text-grey-7")
+                ui.label("务必在VRC内开启OSC，加速器改用路由模式，选择你所使用的麦克风作为系统默认麦克风").style("color: red;")
             ui.label("管道状态").classes("text-h5")
 
             init_banner = ui.column().classes("w-full")
