@@ -21,6 +21,7 @@ this_update_exe_name = "VRCTTP_UPDATE.exe"
 # _update.zip结尾的releases附件会被当成增量更新文件
 urls = {
     "github": "https://api.github.com/repos/sanmusen214/VRCTTP/releases/latest",
+    "gitee": "https://gitee.com/api/v5/repos/sammusen/VRCTTP/releases/latest",
 }
 mirror_base_url = ""
 # 云端以及本地端清洗版本号的函数，洗成只有数字和点的形式，方便比较大小
