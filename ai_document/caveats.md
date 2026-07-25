@@ -107,9 +107,11 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 - 首页版本入口必须始终可用。检查未完成或失败时使用 `version.py.release_info`；
   无新版时使用线上源返回的最新 release notes；只有 `has_new_version=true`
   才显示“立即更新”并启用橙色脉冲提醒。
-- 更新按钮只启动应用目录中的 `VRCTTP_UPDATE.exe`，不会在主进程内覆盖文件。
+- 更新按钮只启动应用目录中的 `VRCTTP_UPDATE.exe`，不会在主进程内覆盖文件。启动成功后 GUI 会提示用户并等待 3 秒，再通过共享线程事件请求主线程调用 `PipelineEngine.shutdown()` 后退出；启动失败时不得触发自动退出。
 - 发布包必须同时包含固定名称的 `VRCTTP.exe` 和 `VRCTTP_UPDATE.exe`。`package.py` 会依次使用 `main.spec` 与 `update.spec` 构建，并在重命名最终目录前放置两者。
-- 更新器放置完成后，打包脚本会通过 `zipfile` 生成同级 `VRCTTP{version_str}_update.zip`，其中仅包含归档名为 `VRCTTP_UPDATE.exe` 的更新器文件。
+- 主程序使用 PyInstaller `onedir` 模式，`VRCTTP.exe` 不是可以脱离 `_internal` 独立运行的单文件程序。Tkinter 初始化至少依赖 `_internal/_tcl_data/` 和 `_internal/_tk_data/`，不能只更新 exe。
+- 更新器放置完成后，打包脚本会通过 `zipfile` 生成同级 `VRCTTP{version_str}_update.zip`。归档必须包含 `VRCTTP_UPDATE.exe`、`VRCTTP.exe`、`_internal/_tcl_data/` 和 `_internal/_tk_data/`；两个数据目录均递归打包并保留相对于打包根目录的路径。
+- `package.py` 在创建更新 ZIP 前会检查上述两个数据目录。任一目录不存在时必须终止打包，不能生成缺少 Tcl/Tk 运行数据的更新包。
 
 ### 队列大小
 

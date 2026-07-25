@@ -57,9 +57,9 @@ python main.py --list-devices         # 列出音频设备后退出
 
 `version.py` 的 `version_str` 是主程序、打包脚本和更新检查使用的当前版本。启动时若应用目录下 `settings/software_config.json` 的 `NOWVERSION` 不同，程序会保留其他配置字段并更新该值；文件或目录不存在时会自动创建。
 
-更新检查调用 `update.py` 的 `whether_has_new_version()`，在守护线程中执行以避免阻塞 GUI。首页右上角始终显示版本说明入口：没有新版时可查看当前或线上最新版本的更新说明；发现新版本时入口切换为橙色脉冲提示并自动弹窗。更新操作由应用目录下独立的 `VRCTTP_UPDATE.exe` 执行。
+更新检查调用 `update.py` 的 `whether_has_new_version()`，在守护线程中执行以避免阻塞 GUI。首页右上角始终显示版本说明入口：没有新版时可查看当前或线上最新版本的更新说明；发现新版本时入口切换为橙色脉冲提示并自动弹窗。更新操作由应用目录下独立的 `VRCTTP_UPDATE.exe` 执行。GUI 成功启动更新器后会提示用户主程序将在 3 秒后关闭；计时结束后向主线程发送退出请求，由主线程调用 `PipelineEngine.shutdown()` 清理运行资源并退出，使更新器能够替换 `VRCTTP.exe`。
 
-打包时还会把该更新器压缩为 `VRCTTP{版本号}_update.zip` 并放在主程序 exe 同级目录。压缩包中保留固定文件名 `VRCTTP_UPDATE.exe`。
+打包时还会生成 `VRCTTP{版本号}_update.zip` 并放在主程序 exe 同级目录。压缩包包含固定名称的 `VRCTTP_UPDATE.exe`、`VRCTTP.exe`，以及 PyInstaller `onedir` 主程序启动 Tkinter 所需的 `_internal/_tcl_data/` 和 `_internal/_tk_data/` 完整目录树。缺少任一数据目录时，`package.py` 会终止打包，避免发布无法启动的增量更新。
 
 ## 数据流模型
 
