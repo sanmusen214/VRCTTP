@@ -52,13 +52,13 @@ def register(app) -> None:  # noqa: ARG001
                         update_action_button.disable()
                         update_dialog.close()
                         ui.notify(
-                            "更新器已启动，VRCTTP 将在 3 秒后自动关闭，请稍候……",
+                            "更新器已启动，VRCTTP 将在 2 秒后自动关闭，请稍候……",
                             type="warning",
-                            timeout=3.0,
+                            timeout=2.0,
                             close_button=False,
                         )
                         ui.timer(
-                            3.0,
+                            2.0,
                             state.request_application_shutdown,
                             once=True,
                         )
