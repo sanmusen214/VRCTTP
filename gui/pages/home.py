@@ -49,7 +49,19 @@ def register(app) -> None:  # noqa: ARG001
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
                             close_fds=True,
                         )
-                        ui.notify("更新器已启动，请按更新器提示操作", type="positive")
+                        update_action_button.disable()
+                        update_dialog.close()
+                        ui.notify(
+                            "更新器已启动，VRCTTP 将在 3 秒后自动关闭，请稍候……",
+                            type="warning",
+                            timeout=3.0,
+                            close_button=False,
+                        )
+                        ui.timer(
+                            3.0,
+                            state.request_application_shutdown,
+                            once=True,
+                        )
                     except Exception as exc:
                         ui.notify(f"启动更新器失败：{exc}", type="negative")
 

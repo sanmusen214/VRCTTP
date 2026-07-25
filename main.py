@@ -214,6 +214,10 @@ def main() -> None:
     # 主循环：等待退出信号
     try:
         while not stop_event.is_set():
+            if gui_enabled and _gui_state.is_application_shutdown_requested():
+                logger.info("收到 GUI 更新退出请求")
+                _shutdown()
+                break
             time.sleep(0.5)
     except KeyboardInterrupt:
         _shutdown()

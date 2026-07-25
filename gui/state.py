@@ -31,6 +31,9 @@ _engine_init_lock = threading.Lock()
 _update_info: VersionInfo | None = None
 _update_lock = threading.Lock()
 
+# GUI 请求整个应用退出时设置，由 main.py 的主循环负责执行清理。
+_application_shutdown_requested = threading.Event()
+
 # 每次程序运行只允许触发一次“最低环境变量为空”的首页引导。
 _initial_env_redirect_consumed = False
 _initial_env_redirect_lock = threading.Lock()
@@ -40,6 +43,7 @@ def init(engine: PipelineEngine) -> None:
     """初始化全局引擎引用，由 create_app() 调用一次。"""
     global _engine
     _engine = engine
+    _application_shutdown_requested.clear()
 
 
 def get_engine() -> PipelineEngine:
@@ -79,6 +83,15 @@ def set_update_info(info: VersionInfo) -> None:
 def get_update_info() -> VersionInfo | None:
     with _update_lock:
         return _update_info
+
+
+def request_application_shutdown() -> None:
+    """请求主线程安全关闭整个应用。"""
+    _application_shutdown_requested.set()
+
+
+def is_application_shutdown_requested() -> bool:
+    return _application_shutdown_requested.is_set()
 
 
 def consume_initial_env_redirect() -> bool:

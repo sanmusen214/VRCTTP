@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import gui.state as state
 from gui.update_notice import build_update_notice
 
 
@@ -52,3 +53,13 @@ def test_new_version_notice_keeps_update_call_to_action() -> None:
     assert notice.badge_text == "新版本 1.3.0"
     assert notice.release_notes == "新版说明"
     assert notice.has_new_version is True
+
+
+def test_gui_can_request_application_shutdown() -> None:
+    state._application_shutdown_requested.clear()
+
+    assert state.is_application_shutdown_requested() is False
+    state.request_application_shutdown()
+    assert state.is_application_shutdown_requested() is True
+
+    state._application_shutdown_requested.clear()
