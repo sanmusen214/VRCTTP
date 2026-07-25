@@ -26,6 +26,10 @@ from core.pipeline import Pipeline
 from modules.audio.loopback import LoopbackSource
 from modules.audio.microphone import MicrophoneSource
 from modules.consumer.osc_vrchat import VRChatOSCConsumer
+from modules.consumer.desktop_overlay import (
+    DesktopOverlayConsumer,
+    DesktopOverlayService,
+)
 from modules.consumer.terminal import TerminalConsumer
 from modules.filter.packet_filter import PacketFilter
 from modules.input.text_input import TextInput
@@ -56,6 +60,7 @@ MODULE_REGISTRY: dict[str, type[PacketConsumerModule]] = {
     "llm_openai_api_call": LLMOpenAIAPICall,
     "terminal": TerminalConsumer,
     "osc_vrchat": VRChatOSCConsumer,
+    "desktop_overlay": DesktopOverlayConsumer,
     "filter": PacketFilter,
 }
 
@@ -81,6 +86,20 @@ def _resolve_env_vars(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_resolve_env_vars(item) for item in obj]
     return obj
+
+
+def _validate_singleton_modules(config: dict) -> None:
+    overlays = [
+        ref_id
+        for ref_id, definition in config.get("modules", {}).items()
+        if isinstance(definition, dict)
+        and definition.get("type") == "desktop_overlay"
+    ]
+    if len(overlays) > 1:
+        raise ValueError(
+            "desktop_overlay 是软件级单例模块，配置中最多只能存在一个实例："
+            + ", ".join(overlays)
+        )
 
 
 class PipelineEngine:
@@ -113,11 +132,13 @@ class PipelineEngine:
         """从磁盘加载并解析配置文件。"""
         with open(self.config_path, "r", encoding="utf-8") as f:
             raw = json.load(f)
+        _validate_singleton_modules(raw)
         self._raw_config = ensure_module_display_names(_resolve_env_vars(raw))
         logger.info("已加载配置文件: %s", self.config_path)
 
     def save_config(self, config_dict: dict) -> None:
         """将配置字典写回磁盘（保留注释不可能，但保留缩进格式）。"""
+        _validate_singleton_modules(config_dict)
         ensure_module_display_names(config_dict)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(config_dict, f, ensure_ascii=False, indent=2)
@@ -350,7 +371,8 @@ class PipelineEngine:
     # ------------------------------------------------------------------
 
     def start_all(self) -> None:
-        """启动所有 Pipeline。"""
+        """启动软件级服务及所有 Pipeline。"""
+        self.start_application_services()
         if not self._pipelines:
             self.build_all()
         for pipeline in self._pipelines.values():
@@ -360,12 +382,31 @@ class PipelineEngine:
                 logger.exception("启动 Pipeline [%s] 失败", pipeline.pipeline_id)
 
     def stop_all(self) -> None:
-        """停止所有 Pipeline。"""
+        """停止所有 Pipeline；软件级服务保持运行。"""
         for pipeline in self._pipelines.values():
             try:
                 pipeline.stop()
             except Exception:
                 logger.exception("停止 Pipeline [%s] 失败", pipeline.pipeline_id)
+
+    def start_application_services(self) -> None:
+        """启动并在线配置不依赖 Pipeline 的进程级服务。"""
+        overlay_defs = [
+            definition
+            for definition in self._raw_config.get("modules", {}).values()
+            if isinstance(definition, dict)
+            and definition.get("type") == "desktop_overlay"
+        ]
+        if overlay_defs:
+            params = overlay_defs[0].get("params", {})
+            DesktopOverlayService.instance().start(
+                params if isinstance(params, dict) else {}
+            )
+
+    def shutdown(self) -> None:
+        """退出整个软件，停止 Pipeline 后释放进程级服务。"""
+        self.stop_all()
+        DesktopOverlayService.instance().stop()
 
     def start_pipeline(self, pipeline_id: str) -> None:
         """启动单条 Pipeline（需先 build_all）。"""
@@ -384,6 +425,7 @@ class PipelineEngine:
     def reload_config(self) -> None:
         """
         热重载：停止所有 Pipeline，重新加载配置并启动。
+        desktop_overlay 等软件级服务仅在线更新配置，不会销毁重建。
         GUI 保存配置后应调用此方法。
         """
         logger.info("开始热重载配置...")

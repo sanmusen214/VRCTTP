@@ -67,6 +67,9 @@ def register(app) -> None:  # noqa: ARG001
                 if not isinstance(source, dict):
                     ui.notify("找不到要复制的模块实例", type="warning")
                     return
+                if source.get("type") == "desktop_overlay":
+                    ui.notify("桌面翻译窗口是软件级单例，不能复制", type="warning")
+                    return
 
                 source_name = module_display_name(ref_id, source)
                 existing_names = {
@@ -213,10 +216,11 @@ def register(app) -> None:  # noqa: ARG001
                                         "编辑", icon="edit", color="primary",
                                         on_click=_make_edit(ref_id, display_name, mod_type, display_params),
                                     ).props("flat")
-                                    ui.button(
-                                        "复制", icon="content_copy", color="primary",
-                                        on_click=lambda _, rid=ref_id: _copy_module(rid),
-                                    ).props("flat")
+                                    if mod_type != "desktop_overlay":
+                                        ui.button(
+                                            "复制", icon="content_copy", color="primary",
+                                            on_click=lambda _, rid=ref_id: _copy_module(rid),
+                                        ).props("flat")
                                     ui.button(
                                         "删除此实例", icon="delete", color="negative",
                                         on_click=_make_delete(ref_id, display_name),
@@ -240,7 +244,22 @@ def register(app) -> None:  # noqa: ARG001
             ui.label("新增模块实例").classes("text-subtitle1 text-bold")
 
             module_classes = engine.get_module_classes()
-            type_names = sorted(module_classes.keys(), key=module_type_sort_key)
+            configured_types = {
+                definition.get("type")
+                for definition in engine.get_raw_config().get("modules", {}).values()
+                if isinstance(definition, dict)
+            }
+            type_names = sorted(
+                (
+                    type_name
+                    for type_name in module_classes
+                    if not (
+                        type_name == "desktop_overlay"
+                        and type_name in configured_types
+                    )
+                ),
+                key=module_type_sort_key,
+            )
 
             with ui.card().classes("w-full q-pa-md"):
                 with ui.row().classes("items-start gap-4 w-full flex-wrap"):
@@ -306,6 +325,9 @@ def register(app) -> None:  # noqa: ARG001
                     engine.save_config(raw)
                     ui.notify(f"已新增模块实例 {display_name!r}（类型: {mod_type}）", type="positive")
                     name_input.value = ""
+                    if mod_type == "desktop_overlay":
+                        ui.navigate.reload()
+                        return
                     draw_instances()
 
                 ui.button(

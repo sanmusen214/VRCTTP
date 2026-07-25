@@ -147,8 +147,8 @@ def main() -> None:
     stop_event = threading.Event()
 
     def _shutdown(signum=None, frame=None):
-        logger.info("正在停止所有管道...")
-        engine.stop_all()
+        logger.info("正在停止翻译服务...")
+        engine.shutdown()
         stop_event.set()
 
     signal.signal(signal.SIGINT, _shutdown)

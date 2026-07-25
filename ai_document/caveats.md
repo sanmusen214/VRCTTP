@@ -185,3 +185,9 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 - 最后接入音频源和 VRChat OSC。
 - 网络 API 失败时优先检查环境变量、endpoint、header 和 payload。
 - GUI 保存配置后记得重载。
+## 软件级服务生命周期
+
+不要在 `DesktopOverlayConsumer.on_start()` / `on_after_stop()` 中管理 Tk 窗口。
+窗口由 `DesktopOverlayService.instance()` 唯一持有，`PipelineEngine.start_all()`
+负责确保它已启动，`PipelineEngine.shutdown()` 负责最终关闭。普通配置重载只
+调用 `stop_all()`，不得销毁该服务，否则切换 Pipeline 会造成窗口闪烁和历史丢失。

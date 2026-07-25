@@ -49,8 +49,9 @@ python main.py --list-devices         # 列出音频设备后退出
 3. 优先加载应用目录的 `config.json`；不存在时，将 `tmp/example_config.json` 移动为同级 `config.json` 后加载。
 4. 将 `version.py` 的版本同步到 `settings/software_config.json`，并在后台检查更新。
 5. 创建 GUI 应用并注册页面。
-6. 后台构建并启动所有启用的 pipeline。
-7. 每个模块在独立后台线程中处理自己的输入队列，退出时停止管道并释放资源。
+6. 启动 `desktop_overlay` 等软件级服务；即使没有启用管道，已配置的桌面窗口也会运行。
+7. 后台构建并启动所有启用的 pipeline。
+8. 每个模块在独立后台线程中处理自己的输入队列；管道重载只重启管道，软件退出时才释放软件级服务。
 
 ## 版本与更新
 
@@ -97,6 +98,10 @@ LoopbackSource
 | `ref_id` | 配置内部使用的稳定模块 ID，参与路由和时间戳 |
 | `display_name` | GUI 显示名称，可改名，不影响路由 |
 
+`desktop_overlay` 是例外的进程级单例输出：配置中最多存在一个实例。
+消费者节点仍可被多条管道引用，但它们都向同一个桌面窗口服务投递结果。
+该窗口从软件启动持续到软件退出，切换、停用或重载管道不会让窗口闪烁重建。
+
 ## 支持的模块类别
 
 | 类别 | 模块 |
@@ -106,7 +111,7 @@ LoopbackSource
 | 语音识别 | `volc_streaming_stt`, `local_stt` |
 | 翻译 | `volc_machine_translation`, `baidu_machine_translation`, `llm_openai_api_call` |
 | 过滤 | `filter` |
-| 输出 | `terminal`, `osc_vrchat` |
+| 输出 | `terminal`, `osc_vrchat`, `desktop_overlay` |
 
 ## 文档导航
 

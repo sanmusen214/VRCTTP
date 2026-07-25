@@ -164,6 +164,7 @@ MODULE_REGISTRY = {
     "filter": PacketFilter,
     "terminal": TerminalConsumer,
     "osc_vrchat": VRChatOSCConsumer,
+    "desktop_overlay": DesktopOverlayConsumer,
 }
 ```
 
@@ -201,5 +202,12 @@ stop_all()
   -> build_all()
   -> start_all()
 ```
+
+`stop_all()` 只管理 Pipeline。`desktop_overlay` 的 Tk 窗口属于软件级服务，
+不会在这个流程中停止；`start_all()` 会把最新透明度、字号、置顶状态和历史上限
+在线应用到已有窗口。只有程序退出调用 `engine.shutdown()` 时才关闭窗口。
+
+引擎在加载和保存配置时还会校验 `desktop_overlay` 的单例约束，配置中出现两个
+该类型实例会直接报错。
 
 GUI 保存配置后，需要显式点击重载按钮，改动才会作用到正在运行的 pipeline。

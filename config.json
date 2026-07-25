@@ -156,6 +156,19 @@
       },
       "display_name": "VRChat输出"
     },
+    "桌面翻译窗口": {
+      "type": "desktop_overlay",
+      "params": {
+        "opacity": 0.78,
+        "font_size": 20,
+        "width": 720,
+        "height": 360,
+        "topmost": true,
+        "history_size": 200,
+        "group_by": "timestamp_中间件-GUI输入文字"
+      },
+      "display_name": "桌面翻译窗口"
+    },
     "_comment_filter": "── 中间件模块 ─────────────────────────────────────────",
     "中间件-完整句子过滤器": {
       "type": "filter",
@@ -198,7 +211,7 @@
     {
       "id": "mic_local_stt",
       "name": "麦克风中文到英语&日语（分句-本地识别-百度翻译）",
-      "enabled": true,
+      "enabled": false,
       "graph": {
         "entry": "分句麦克风",
         "routes": {
@@ -214,11 +227,13 @@
           ],
           "翻译到英文-百度翻译API": [
             "软件日志输出",
-            "VRChat输出"
+            "VRChat输出",
+            "桌面翻译窗口"
           ],
           "翻译到日文-百度翻译API": [
             "软件日志输出",
-            "VRChat输出"
+            "VRChat输出",
+            "桌面翻译窗口"
           ]
         }
       }
@@ -241,7 +256,8 @@
           ],
           "翻译到中文-百度翻译API": [
             "软件日志输出",
-            "VRChat输出"
+            "VRChat输出",
+            "桌面翻译窗口"
           ]
         }
       }
@@ -250,7 +266,7 @@
       "_comment": "火山引擎 STT + MT 串联管道（流式）：loopback → STT → 中文MT → 终端/OSC 输出",
       "id": "mic_volc_streaming",
       "name": "麦克风中文到英语（流式-火山引擎API）",
-      "enabled": false,
+      "enabled": true,
       "graph": {
         "entry": "流式麦克风",
         "routes": {
@@ -265,7 +281,8 @@
           ],
           "mod_82a2acacfaa354f5": [
             "软件日志输出",
-            "VRChat输出"
+            "VRChat输出",
+            "桌面翻译窗口"
           ]
         }
       }
@@ -288,7 +305,8 @@
           ],
           "mod_82a2acacfaa354f5": [
             "软件日志输出",
-            "VRChat输出"
+            "VRChat输出",
+            "桌面翻译窗口"
           ]
         }
       }

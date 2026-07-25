@@ -17,8 +17,40 @@
 | `filter` | `PacketFilter` | 过滤 | 通用字段过滤器 |
 | `terminal` | `TerminalConsumer` | 输出 | 终端和 GUI 输出缓冲 |
 | `osc_vrchat` | `VRChatOSCConsumer` | 输出 | VRChat chatbox OSC 输出 |
+| `desktop_overlay` | `DesktopOverlayConsumer` | 输出 | 桌面半透明翻译历史窗口 |
 
 GUI 展示和选择模块时会按管道流向分区：输入源 → 语音识别 → 过滤处理 → 翻译 → 输出 → 其他。这个顺序用于模块目录页的实例列表、模块类型选择、模块类型参考表，以及管道路由编辑下拉菜单。
+
+## 桌面翻译窗口
+
+### DesktopOverlayConsumer
+
+注册类型：`desktop_overlay`
+
+该消费者仅接收并聚合 `is_partial=false` 的完整句子。窗口内每条记录按原文、
+目标语言代码排序后的译文排列；最新句子始终位于顶部，同一分组后到达的语言会
+原地更新而不是新增重复记录。窗口支持系统边框拖动、自由缩放和滚轮查看历史。
+
+窗口由 `DesktopOverlayService` 进程级单例持有。消费者实例不创建或销毁 Tk，
+只向服务队列投递渲染结果。因此：
+
+- 配置中最多只能有一个 `desktop_overlay` 模块实例。
+- 一个实例可以被多条 Pipeline 共用。
+- 即使没有启用或运行中的 Pipeline，只要配置里存在该模块，窗口仍随软件启动。
+- Pipeline 停止、切换和热重载不会关闭或重建窗口，已有历史继续保留。
+- 透明度、字号、置顶和历史数量在配置重载时在线更新。
+- 软件整体退出调用 `PipelineEngine.shutdown()` 后才关闭窗口。
+
+配置参数：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `opacity` | `0.78` | 窗口整体不透明度，范围 0.1-1.0 |
+| `font_size` | `20` | 窗口内文字大小 |
+| `width` / `height` | `720` / `360` | 第一次创建窗口时的初始尺寸 |
+| `topmost` | `true` | 是否保持置顶 |
+| `history_size` | `200` | 最多保留的完整句子数量 |
+| `group_by` | `""` | 多语言公共时间戳；留空时按包创建时间自动分句 |
 
 ## 音频源
 

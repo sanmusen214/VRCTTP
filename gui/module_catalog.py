@@ -29,6 +29,7 @@ _TYPE_CATEGORY: dict[str, str] = {
     "llm_openai_api_call": "translation",
     "terminal": "output",
     "osc_vrchat": "output",
+    "desktop_overlay": "output",
 }
 
 _CATEGORY_LABELS = dict(MODULE_CATEGORY_ORDER)
