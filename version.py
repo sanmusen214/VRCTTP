@@ -1,4 +1,4 @@
-version_str = "0.4.3"
+version_str = "0.4.4"
 release_info = """
 目前更新逻辑有点问题，请先关闭软件本体后，双击VRCTTP_UPDATE.exe 进行更新
 ---

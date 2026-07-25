@@ -39,6 +39,12 @@ DIST_VRCTTP   = os.path.join(ROOT_DIR, "dist", "VRCTTP")
 UPDATE_DATA_DIRS = (
     os.path.join("_internal", "_tcl_data"),
     os.path.join("_internal", "_tk_data"),
+    os.path.join("_internal", "tcl8"),
+)
+UPDATE_DATA_FILES = (
+    os.path.join("_internal", "_tkinter.pyd"),
+    os.path.join("_internal", "tcl86t.dll"),
+    os.path.join("_internal", "tk86t.dll"),
 )
 
 
@@ -136,9 +142,22 @@ def create_update_zip() -> None:
     if missing_dirs:
         sys.exit(f"❌ 找不到更新所需目录: {', '.join(missing_dirs)}")
 
+    missing_files = [
+        relative_file
+        for relative_file in UPDATE_DATA_FILES
+        if not os.path.isfile(os.path.join(DIST_MAIN, relative_file))
+    ]
+    if missing_files:
+        sys.exit(f"❌ 找不到更新所需文件: {', '.join(missing_files)}")
+
     with zipfile.ZipFile(UPDATE_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(DST_UPDATE_EXE, arcname="VRCTTP_UPDATE.exe")
         archive.write(DST_EXE, arcname="VRCTTP.exe")
+        for relative_file in UPDATE_DATA_FILES:
+            archive.write(
+                os.path.join(DIST_MAIN, relative_file),
+                arcname=relative_file,
+            )
         for relative_dir in UPDATE_DATA_DIRS:
             source_dir = os.path.join(DIST_MAIN, relative_dir)
             for current_dir, _, filenames in os.walk(source_dir):
