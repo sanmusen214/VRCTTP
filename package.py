@@ -36,6 +36,10 @@ SRC_UPDATE_EXE = os.path.join(ROOT_DIR, "dist", "update.exe")
 DST_UPDATE_EXE = os.path.join(DIST_MAIN, "VRCTTP_UPDATE.exe")
 UPDATE_ZIP     = os.path.join(DIST_MAIN, f"VRCTTP{VERSION}_update.zip")
 DIST_VRCTTP   = os.path.join(ROOT_DIR, "dist", "VRCTTP")
+UPDATE_DATA_DIRS = (
+    os.path.join("_internal", "_tcl_data"),
+    os.path.join("_internal", "_tk_data"),
+)
 
 
 def step(msg: str) -> None:
@@ -123,9 +127,25 @@ def create_update_zip() -> None:
     step(f"压缩更新器 → {os.path.basename(UPDATE_ZIP)}")
     if not os.path.isfile(DST_UPDATE_EXE):
         sys.exit(f"❌ 找不到待压缩的更新器 {DST_UPDATE_EXE}")
+
+    missing_dirs = [
+        relative_dir
+        for relative_dir in UPDATE_DATA_DIRS
+        if not os.path.isdir(os.path.join(DIST_MAIN, relative_dir))
+    ]
+    if missing_dirs:
+        sys.exit(f"❌ 找不到更新所需目录: {', '.join(missing_dirs)}")
+
     with zipfile.ZipFile(UPDATE_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(DST_UPDATE_EXE, arcname="VRCTTP_UPDATE.exe")
         archive.write(DST_EXE, arcname="VRCTTP.exe")
+        for relative_dir in UPDATE_DATA_DIRS:
+            source_dir = os.path.join(DIST_MAIN, relative_dir)
+            for current_dir, _, filenames in os.walk(source_dir):
+                for filename in filenames:
+                    source_path = os.path.join(current_dir, filename)
+                    archive_path = os.path.relpath(source_path, DIST_MAIN)
+                    archive.write(source_path, arcname=archive_path)
     print(f"✅ 更新压缩包已创建: {UPDATE_ZIP}")
 
 
