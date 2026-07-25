@@ -57,7 +57,7 @@ python main.py --list-devices         # 列出音频设备后退出
 
 `version.py` 的 `version_str` 是主程序、打包脚本和更新检查使用的当前版本。启动时若应用目录下 `settings/software_config.json` 的 `NOWVERSION` 不同，程序会保留其他配置字段并更新该值；文件或目录不存在时会自动创建。
 
-更新检查调用 `update.py` 的 `whether_has_new_version()`，在守护线程中执行以避免阻塞 GUI。发现新版本后由首页展示弹窗和持久的顶部更新入口。更新操作由应用目录下独立的 `VRCTTP_UPDATE.exe` 执行。
+更新检查调用 `update.py` 的 `whether_has_new_version()`，在守护线程中执行以避免阻塞 GUI。首页右上角始终显示版本说明入口：没有新版时可查看当前或线上最新版本的更新说明；发现新版本时入口切换为橙色脉冲提示并自动弹窗。更新操作由应用目录下独立的 `VRCTTP_UPDATE.exe` 执行。
 
 打包时还会把该更新器压缩为 `VRCTTP{版本号}_update.zip` 并放在主程序 exe 同级目录。压缩包中保留固定文件名 `VRCTTP_UPDATE.exe`。
 

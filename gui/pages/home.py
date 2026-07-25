@@ -13,9 +13,10 @@ from nicegui import app as nicegui_app, ui
 
 import gui.state as state
 from gui.components.nav import create_nav
+from gui.update_notice import build_update_notice
 from runtime_paths import all_minimum_env_values_empty
 from runtime_paths import application_dir
-from version import version_str
+from version import release_info, version_str
 
 
 def register(app) -> None:  # noqa: ARG001
@@ -31,11 +32,11 @@ def register(app) -> None:  # noqa: ARG001
         updater_path = os.path.join(application_dir(), "VRCTTP_UPDATE.exe")
         update_dialog = ui.dialog()
         with update_dialog, ui.card().classes("w-full").style("width:min(980px, 92vw); max-width:980px"):
-            ui.label("发现新版本").classes("text-h5 text-orange-9")
+            update_title_label = ui.label("版本更新说明").classes("text-h5")
             update_version_label = ui.label().classes("text-subtitle1 text-bold")
             update_release_notes = ui.markdown("").classes("w-full")
             with ui.row().classes("justify-end w-full gap-2"):
-                ui.button("稍后再说", on_click=update_dialog.close).props("flat")
+                ui.button("关闭", on_click=update_dialog.close).props("flat")
 
                 def _launch_updater() -> None:
                     if not os.path.isfile(updater_path):
@@ -52,7 +53,13 @@ def register(app) -> None:  # noqa: ARG001
                     except Exception as exc:
                         ui.notify(f"启动更新器失败：{exc}", type="negative")
 
-                ui.button("立即更新", icon="system_update_alt", on_click=_launch_updater, color="orange")
+                update_action_button = ui.button(
+                    "立即更新",
+                    icon="system_update_alt",
+                    on_click=_launch_updater,
+                    color="orange",
+                )
+                update_action_button.set_visibility(False)
 
         ui.add_css("""
         @keyframes update-border-pulse {
@@ -68,30 +75,54 @@ def register(app) -> None:  # noqa: ARG001
 
         update_badge = None
 
+        def _apply_update_notice() -> bool:
+            notice = build_update_notice(
+                state.get_update_info(),
+                current_version=version_str,
+                local_release_notes=release_info,
+            )
+            update_title_label.set_text(notice.title)
+            update_version_label.set_text(notice.version_text)
+            update_release_notes.set_content(notice.release_notes)
+            update_action_button.set_visibility(notice.has_new_version)
+            update_title_label.classes(
+                add="text-orange-9" if notice.has_new_version else None,
+                remove=None if notice.has_new_version else "text-orange-9",
+            )
+            if update_badge is not None:
+                update_badge.set_text(notice.badge_text)
+                update_badge.props(remove="color=orange color=primary")
+                update_badge.props(
+                    add="color=orange" if notice.has_new_version else "color=primary"
+                )
+                if notice.has_new_version:
+                    update_badge.classes(add="update-available-badge")
+                else:
+                    update_badge.classes(remove="update-available-badge")
+            return notice.has_new_version
+
+        def _open_update_notice() -> None:
+            _apply_update_notice()
+            update_dialog.open()
+
         def _render_update_badge() -> None:
             nonlocal update_badge
             update_badge = ui.button(
-                "发现新版本",
-                icon="system_update_alt",
-                on_click=update_dialog.open,
-                color="orange",
-            ).props("dense no-caps").classes("update-available-badge")
-            update_badge.set_visibility(False)
+                "版本说明",
+                icon="info",
+                on_click=_open_update_notice,
+                color="primary",
+            ).props("dense no-caps")
 
         create_nav(right_content=_render_update_badge)
+        _apply_update_notice()
 
         update_dialog_opened = False
 
         def _refresh_update_notice() -> None:
             nonlocal update_dialog_opened
-            info = state.get_update_info()
-            if info is None or not info.has_new_version or update_badge is None:
-                return
-            update_version_label.set_text(f"最新版本：{info.version_str}")
-            update_release_notes.set_content(info.update_body_text or "暂无更新说明。")
-            update_badge.set_text(f"新版本 {info.version_str}")
-            update_badge.set_visibility(True)
-            if not update_dialog_opened:
+            has_new_version = _apply_update_notice()
+            if has_new_version and not update_dialog_opened:
                 update_dialog_opened = True
                 update_dialog.open()
 

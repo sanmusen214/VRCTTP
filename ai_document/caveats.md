@@ -104,6 +104,9 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 - 只在 `version.py` 修改 `version_str`，不要在 `package.py` 或 GUI 再维护独立版本号。
 - `settings/software_config.json` 位于应用目录，主程序启动时会同步 `NOWVERSION` 并保留 `SEC_KEY_M`、`ENCRYPT_KEY` 等更新源配置。
 - 在线检查在后台线程运行；网络失败只记录日志，不阻止主程序工作。
+- 首页版本入口必须始终可用。检查未完成或失败时使用 `version.py.release_info`；
+  无新版时使用线上源返回的最新 release notes；只有 `has_new_version=true`
+  才显示“立即更新”并启用橙色脉冲提醒。
 - 更新按钮只启动应用目录中的 `VRCTTP_UPDATE.exe`，不会在主进程内覆盖文件。
 - 发布包必须同时包含固定名称的 `VRCTTP.exe` 和 `VRCTTP_UPDATE.exe`。`package.py` 会依次使用 `main.spec` 与 `update.spec` 构建，并在重命名最终目录前放置两者。
 - 更新器放置完成后，打包脚本会通过 `zipfile` 生成同级 `VRCTTP{version_str}_update.zip`，其中仅包含归档名为 `VRCTTP_UPDATE.exe` 的更新器文件。
