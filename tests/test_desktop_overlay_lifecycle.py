@@ -10,12 +10,17 @@ class _FakeOverlayService:
     def __init__(self) -> None:
         self.started_with: list[dict] = []
         self.stop_count = 0
+        self.ensure_visible_results: list[dict] = []
 
     def start(self, config: dict) -> None:
         self.started_with.append(config)
 
     def stop(self) -> None:
         self.stop_count += 1
+
+    def ensure_visible(self, config: dict) -> bool:
+        self.ensure_visible_results.append(config)
+        return True
 
 
 def test_rejects_multiple_desktop_overlay_definitions() -> None:
@@ -60,6 +65,8 @@ def test_overlay_service_outlives_pipeline_stop(monkeypatch, tmp_path) -> None:
 
     assert service.started_with == [{"opacity": 0.6}]
     assert service.stop_count == 0
+    assert engine.ensure_desktop_overlay_visible() is True
+    assert service.ensure_visible_results == [{"opacity": 0.6}]
 
     engine.shutdown()
     assert service.stop_count == 1

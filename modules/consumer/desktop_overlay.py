@@ -32,6 +32,11 @@ class _OverlayConfig:
     history_size: int = 200
 
 
+@dataclass(frozen=True)
+class _OverlayShow:
+    pass
+
+
 class DesktopOverlayService:
     """进程级 Tk 窗口单例，生命周期独立于所有 Pipeline。"""
 
@@ -49,9 +54,12 @@ class DesktopOverlayService:
         if type(self)._instance is not None:
             raise RuntimeError("DesktopOverlayService 必须通过 instance() 获取")
         self._config = _OverlayConfig()
-        self._commands: queue.Queue[_OverlayUpdate | _OverlayConfig | None] = queue.Queue()
+        self._commands: queue.Queue[
+            _OverlayUpdate | _OverlayConfig | _OverlayShow | None
+        ] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
+        self._visible = threading.Event()
         self._lock = threading.Lock()
 
     def start(self, config: dict | None = None) -> None:
@@ -76,6 +84,18 @@ class DesktopOverlayService:
 
     def submit(self, update: _OverlayUpdate) -> None:
         self._commands.put(update)
+
+    def ensure_visible(self, config: dict | None = None) -> bool:
+        """仅当窗口隐藏或线程已退出时恢复窗口；已可见时不做任何操作。"""
+        if config is not None:
+            self.configure(config)
+        if not self._thread or not self._thread.is_alive():
+            self.start()
+            return True
+        if self._visible.is_set():
+            return False
+        self._commands.put(_OverlayShow())
+        return True
 
     def stop(self) -> None:
         """仅供软件整体退出调用。"""
@@ -102,6 +122,7 @@ class DesktopOverlayService:
             root.attributes("-alpha", config.opacity)
             root.attributes("-topmost", config.topmost)
             root.configure(background="#111111")
+            self._visible.set()
 
             text_font = font.Font(
                 family="Microsoft YaHei UI", size=config.font_size
@@ -154,6 +175,11 @@ class DesktopOverlayService:
                         del entries[history_size:]
                         changed = True
                         continue
+                    if isinstance(command, _OverlayShow):
+                        root.deiconify()
+                        root.lift()
+                        self._visible.set()
+                        continue
                     entries[:] = [
                         (key, text) for key, text in entries if key != command.key
                     ]
@@ -167,13 +193,19 @@ class DesktopOverlayService:
                     return
                 root.after(50, poll_updates)
 
-            root.protocol("WM_DELETE_WINDOW", root.withdraw)
+            def hide_window() -> None:
+                root.withdraw()
+                self._visible.clear()
+
+            root.protocol("WM_DELETE_WINDOW", hide_window)
             self._ready.set()
             root.after(50, poll_updates)
             root.mainloop()
         except Exception:
             logger.exception("桌面悬浮翻译窗口运行失败")
             self._ready.set()
+        finally:
+            self._visible.clear()
 
 
 def _config_from_dict(config: dict) -> _OverlayConfig:
@@ -212,13 +244,15 @@ class DesktopOverlayConsumer(PacketConsumerModule):
             {"name": "height", "type": ParamType.Int, "default": 360, "required": False, "description": "窗口初始高度", "selectable": None, "min": 120, "max": 2160},
             {"name": "topmost", "type": ParamType.Bool, "default": True, "required": False, "description": "窗口是否保持置顶", "selectable": None},
             {"name": "history_size", "type": ParamType.Int, "default": 200, "required": False, "description": "窗口中保留的完整句子数量", "selectable": None, "min": 1, "max": 5000},
-            {"name": "group_by", "type": ParamType.String, "default": "", "required": False, "description": "多语言分组 key，如 timestamp_中间件-GUI输入文字", "selectable": None},
+            {"name": "group_by", "type": ParamType.String, "default": "timestamp_中间件-GUI输入文字", "required": False, "description": "多语言分组 key，如 timestamp_中间件-GUI输入文字", "selectable": None},
         ]
 
     def __init__(self, module_id: str, config: dict) -> None:
         super().__init__(module_id, config)
         self._aggregator = MultilingualPacketAggregator(
-            group_by=str(config.get("group_by", ""))
+            group_by=str(
+                config.get("group_by", "timestamp_中间件-GUI输入文字")
+            )
         )
         self._window = DesktopOverlayService.instance()
 

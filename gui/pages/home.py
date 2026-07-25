@@ -264,5 +264,17 @@ def register(app) -> None:  # noqa: ARG001
 
                 ui.button("重载所有配置", on_click=_reload_all, color="primary")
 
+                def _show_desktop_overlay() -> None:
+                    if engine.ensure_desktop_overlay_visible():
+                        ui.notify("已恢复桌面翻译窗口", type="positive")
+
+                if engine.has_desktop_overlay():
+                    ui.button(
+                        "显示桌面翻译窗口",
+                        icon="picture_in_picture_alt",
+                        on_click=_show_desktop_overlay,
+                        color="secondary",
+                    )
+
             ui.timer(5.0, refresh)
             ui.timer(1.0, _refresh_update_notice)

@@ -196,3 +196,26 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 窗口由 `DesktopOverlayService.instance()` 唯一持有，`PipelineEngine.start_all()`
 负责确保它已启动，`PipelineEngine.shutdown()` 负责最终关闭。普通配置重载只
 调用 `stop_all()`，不得销毁该服务，否则切换 Pipeline 会造成窗口闪烁和历史丢失。
+
+窗口的系统关闭操作使用 `withdraw()` 隐藏而不是销毁 Tk。服务通过线程安全事件
+维护可见状态，`ensure_visible()` 在已显示时必须保持幂等；隐藏时使用
+`deiconify()` 恢复。内建模块默认值统一维护在 `core/default_modules.py`，
+不要在首页或引擎中复制一份默认参数。
+
+新增需要自动补齐的模块时，只向 `DEFAULT_MODULES` 追加声明：
+
+```python
+{
+    "ref_id": "建议的模块键",
+    "match": {"type": "模块类型"},
+    "definition": {
+        "type": "模块类型",
+        "display_name": "显示名称",
+        "params": {},
+    },
+}
+```
+
+补全流程会逐项检查 `match` 的所有字段。已有匹配实例时保留用户配置；缺失时
+深拷贝 `definition`；建议 `ref_id` 冲突时自动追加 `_2`、`_3`。因此增加默认项
+不应再修改 `ensure_default_modules()` 或 `PipelineEngine`。

@@ -19,6 +19,7 @@ import re
 from typing import Any
 
 from core.module import BaseModule, PacketConsumerModule, PacketProducerModule
+from core.default_modules import ensure_default_modules
 from core.module_identity import ensure_module_display_names, module_display_name
 from core.pipeline import Pipeline
 
@@ -132,6 +133,10 @@ class PipelineEngine:
         """从磁盘加载并解析配置文件。"""
         with open(self.config_path, "r", encoding="utf-8") as f:
             raw = json.load(f)
+        if ensure_default_modules(raw):
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(raw, f, ensure_ascii=False, indent=2)
+            logger.info("配置中缺少内建默认模块，已按声明列表自动补齐")
         _validate_singleton_modules(raw)
         self._raw_config = ensure_module_display_names(_resolve_env_vars(raw))
         logger.info("已加载配置文件: %s", self.config_path)
@@ -402,6 +407,29 @@ class PipelineEngine:
             DesktopOverlayService.instance().start(
                 params if isinstance(params, dict) else {}
             )
+
+    def has_desktop_overlay(self) -> bool:
+        """配置中是否存在桌面翻译窗口模块。"""
+        return any(
+            isinstance(definition, dict)
+            and definition.get("type") == "desktop_overlay"
+            for definition in self._raw_config.get("modules", {}).values()
+        )
+
+    def ensure_desktop_overlay_visible(self) -> bool:
+        """恢复隐藏的桌面窗口；已可见时返回 False 且不做操作。"""
+        overlay_defs = [
+            definition
+            for definition in self._raw_config.get("modules", {}).values()
+            if isinstance(definition, dict)
+            and definition.get("type") == "desktop_overlay"
+        ]
+        if not overlay_defs:
+            return False
+        params = overlay_defs[0].get("params", {})
+        return DesktopOverlayService.instance().ensure_visible(
+            params if isinstance(params, dict) else {}
+        )
 
     def shutdown(self) -> None:
         """退出整个软件，停止 Pipeline 后释放进程级服务。"""

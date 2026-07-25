@@ -46,7 +46,7 @@ python main.py --list-devices         # 列出音频设备后退出
 
 1. 确定应用目录：打包版为 exe 所在目录，源码版为项目目录。
 2. 在应用目录创建或补齐 `.env` 的最低字段，并加载环境变量。
-3. 优先加载应用目录的 `config.json`；不存在时，将 `tmp/example_config.json` 移动为同级 `config.json` 后加载。
+3. 优先加载应用目录的 `config.json`；不存在时，将 `tmp/example_config.json` 移动为同级 `config.json` 后加载。随后由 `core/default_modules.py` 按声明列表自动补齐缺失的内建模块并持久化；桌面翻译窗口是当前列表中的一个默认项。
 4. 将 `version.py` 的版本同步到 `settings/software_config.json`，并在后台检查更新。
 5. 创建 GUI 应用并注册页面。
 6. 启动 `desktop_overlay` 等软件级服务；即使没有启用管道，已配置的桌面窗口也会运行。
@@ -101,6 +101,8 @@ LoopbackSource
 `desktop_overlay` 是例外的进程级单例输出：配置中最多存在一个实例。
 消费者节点仍可被多条管道引用，但它们都向同一个桌面窗口服务投递结果。
 该窗口从软件启动持续到软件退出，切换、停用或重载管道不会让窗口闪烁重建。
+用户关闭窗口后服务仍在运行，首页的“显示桌面翻译窗口”按钮可恢复窗口，
+无需重启软件。
 
 ## 支持的模块类别
 

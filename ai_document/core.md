@@ -8,6 +8,7 @@ core/
 ├── module.py           # BaseModule / Producer / Consumer 基类
 ├── pipeline.py         # 单条 DAG 管道
 ├── engine.py           # 配置加载、模块注册、管道管理
+├── default_modules.py  # 启动时补齐缺失的软件内建默认模块
 └── module_identity.py  # ref_id / display_name 兼容与生成
 ```
 
@@ -209,5 +210,11 @@ stop_all()
 
 引擎在加载和保存配置时还会校验 `desktop_overlay` 的单例约束，配置中出现两个
 该类型实例会直接报错。
+
+`load_config()` 会调用独立的 `core.default_modules.ensure_default_modules()`，
+统一遍历 `DEFAULT_MODULES` 声明列表并写回所有缺失项。每条声明包含建议
+`ref_id`、判断已有实例的 `match` 条件和要写入的完整 `definition`；当前列表
+声明了桌面翻译窗口。`has_desktop_overlay()` 供 GUI 判断是否展示恢复按钮，
+`ensure_desktop_overlay_visible()` 只在窗口隐藏或线程退出时恢复窗口。
 
 GUI 保存配置后，需要显式点击重载按钮，改动才会作用到正在运行的 pipeline。
