@@ -1,4 +1,4 @@
-version_str = "0.4.2"
+version_str = "0.4.3"
 release_info = """
 
 [VRCTTP 使用教程-哔哩哔哩](https://www.bilibili.com/video/BV1cgjN6fEfm/)
