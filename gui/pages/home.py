@@ -58,7 +58,7 @@ def register(app) -> None:  # noqa: ARG001
                             close_button=False,
                         )
                         ui.timer(
-                            2.0,
+                            1.5,
                             state.request_application_shutdown,
                             once=True,
                         )
