@@ -27,7 +27,7 @@ DEFAULT_MODULES: list[dict[str, Any]] = [
                 "width": 720,
                 "height": 360,
                 "topmost": True,
-                "history_size": 200,
+                "history_size": 30,
                 "group_by": "timestamp_中间件-GUI输入文字",
             },
             "display_name": "桌面翻译窗口",

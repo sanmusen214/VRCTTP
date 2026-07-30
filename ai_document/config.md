@@ -329,5 +329,5 @@ payload 明文中用 `%{original}` 表示上游识别文本。
 | `font_size` | `20` | 翻译历史文字大小 |
 | `width` / `height` | `720` / `360` | 窗口首次创建时的初始尺寸 |
 | `topmost` | `true` | 是否保持在其他窗口上方 |
-| `history_size` | `200` | 保留的完整句子数量 |
+| `history_size` | `30` | 保留的完整句子数量，允许 1-30，超过 30 会被运行时限制为 30 |
 | `group_by` | `timestamp_中间件-GUI输入文字` | 多语言分支公共祖先时间戳 |

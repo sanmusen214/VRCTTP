@@ -90,6 +90,7 @@ gui/
 - 每个 pipeline 卡片可跳转到 `/pipelines?edit_pipeline=<pipeline_id>`，自动打开对应管道编辑弹窗。
 - 提供“重载所有配置”操作。
 - 配置中存在 `desktop_overlay` 时显示“显示桌面翻译窗口”按钮；窗口已隐藏或异常退出时恢复它，窗口已可见时不执行任何操作。
+- 桌面翻译窗口采用可滚动增量历史，最多显示 30 个完整句子；新结果置顶，达到上限后自动淘汰底部最旧记录。
 - 当启用的 pipeline 使用 `sync_vrc_mic=true` 时，显示 VRChat OSC 同步提醒。
 
 注意：切换 `enabled` 只保存配置，不会立即重载运行中的管道。
