@@ -558,13 +558,17 @@ class PipelineEngine:
         """
         result = []
         for pid, pipeline in self._pipelines.items():
+            processing_types = [
+                type(module).__name__ for module in pipeline.translation_chain
+            ]
             result.append({
                 "id": pid,
                 "name": pipeline.name,
                 "status": pipeline.status,
                 "audio_source_type": type(pipeline.audio_source).__name__,
-                "translation_types": [type(m).__name__ for m in pipeline.translation_chain],
-                "translation_type": type(pipeline.translation).__name__,  # 向后兼容（首模块）
+                "translation_types": processing_types,
+                # 向后兼容旧 GUI/调用方。只有生产者的合法空管道没有首个处理模块。
+                "translation_type": processing_types[0] if processing_types else None,
                 "consumer_types": [type(c).__name__ for c in pipeline.consumers],
             })
         return result

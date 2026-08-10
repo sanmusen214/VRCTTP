@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from urllib.parse import quote
@@ -17,6 +18,23 @@ from gui.update_notice import build_update_notice
 from runtime_paths import all_minimum_env_values_empty
 from runtime_paths import application_dir
 from version import release_info, version_str
+
+logger = logging.getLogger(__name__)
+
+
+def _status_detail(status: dict) -> tuple[str, str, str]:
+    """将引擎状态安全地转换为 GUI 文本，兼容旧状态结构和空管道。"""
+    audio_source = str(status.get("audio_source_type") or "未知")
+    processing_types = status.get("translation_types")
+    if not isinstance(processing_types, list):
+        legacy_type = status.get("translation_type")
+        processing_types = [legacy_type] if legacy_type else []
+    processing = ", ".join(str(item) for item in processing_types if item) or "无"
+    consumer_types = status.get("consumer_types")
+    if not isinstance(consumer_types, list):
+        consumer_types = []
+    consumers = ", ".join(str(item) for item in consumer_types if item) or "无"
+    return audio_source, processing, consumers
 
 
 def register(app) -> None:  # noqa: ARG001
@@ -147,8 +165,9 @@ def register(app) -> None:  # noqa: ARG001
 
             init_banner = ui.column().classes("w-full")
             status_col = ui.column().classes("w-full gap-2")
+            last_refresh_error: str | None = None
 
-            async def refresh() -> None:
+            async def _refresh() -> None:
                 # ── 引擎初始化状态横幅 ──────────────────────────────
                 init_banner.clear()
                 init_status, init_error = state.get_engine_init_status()
@@ -219,15 +238,19 @@ def register(app) -> None:  # noqa: ARG001
                                 # Use closure to capture pid
                                 def _make_toggle(pipeline_id: str):
                                     async def _toggle(e) -> None:
-                                        r = engine.get_raw_config()
-                                        for p in r.get("pipelines", []):
-                                            if isinstance(p, dict) and p.get("id") == pipeline_id:
-                                                p["enabled"] = e.value
-                                        engine.save_config(r)
-                                        ui.notify(
-                                            f"{'启用' if e.value else '禁用'} {pipeline_id}，配置已保存（需点击「重载所有配置」生效）",
-                                            type="positive" if e.value else "warning",
-                                        )
+                                        try:
+                                            r = engine.get_raw_config()
+                                            for p in r.get("pipelines", []):
+                                                if isinstance(p, dict) and p.get("id") == pipeline_id:
+                                                    p["enabled"] = e.value
+                                            engine.save_config(r)
+                                            ui.notify(
+                                                f"{'启用' if e.value else '禁用'} {pipeline_id}，配置已保存（需点击「重载所有配置」生效）",
+                                                type="positive" if e.value else "warning",
+                                            )
+                                        except Exception as exc:
+                                            logger.exception("保存 Pipeline [%s] 启用状态失败", pipeline_id)
+                                            ui.notify(f"保存启用状态失败：{exc}", type="negative")
                                         await refresh()
                                     return _toggle
 
@@ -249,17 +272,40 @@ def register(app) -> None:  # noqa: ARG001
                             # Show detail row for running pipelines
                             if pid in running_map:
                                 s = running_map[pid]
+                                audio_source, processing, consumers = _status_detail(s)
                                 with ui.row().classes("text-caption text-grey gap-4 q-mt-xs"):
-                                    ui.label(f"音频源: {s['audio_source_type']}")
-                                    ui.label(f"翻译/处理: {s['translation_type']}")
-                                    ui.label(f"消费者: {', '.join(s['consumer_types'])}")
+                                    ui.label(f"音频源: {audio_source}")
+                                    ui.label(f"翻译/处理: {processing}")
+                                    ui.label(f"消费者: {consumers}")
+
+            async def refresh() -> None:
+                """隔离定时刷新异常，避免单项异常升级为 NiceGUI HTTP 500。"""
+                nonlocal last_refresh_error
+                try:
+                    await _refresh()
+                    last_refresh_error = None
+                except Exception as exc:
+                    error_text = str(exc) or type(exc).__name__
+                    if error_text != last_refresh_error:
+                        logger.exception("刷新 GUI 管道状态失败")
+                        last_refresh_error = error_text
+                    status_col.clear()
+                    with status_col:
+                        with ui.card().classes("w-full bg-red-1 q-pa-sm"):
+                            ui.label(f"管道状态刷新失败：{error_text}").classes(
+                                "text-negative"
+                            )
 
             await refresh()
 
             with ui.row().classes("gap-3 q-mt-sm"):
                 async def _reload_all() -> None:
-                    engine.reload_config()
-                    ui.notify("已重载所有配置", type="positive")
+                    try:
+                        engine.reload_config()
+                        ui.notify("已重载所有配置", type="positive")
+                    except Exception as exc:
+                        logger.exception("从 GUI 重载配置失败")
+                        ui.notify(f"重载配置失败：{exc}", type="negative")
                     await refresh()
 
                 ui.button("重载所有配置", on_click=_reload_all, color="primary")
