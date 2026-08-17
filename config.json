@@ -64,7 +64,7 @@
       ],
       "type": "local_stt",
       "params": {
-        "model_path": ".models\\paraformer",
+        "model_path": "models\\paraformer",
         "model_name": "paraformer-zh-streaming",
         "streaming_mode": true,
         "chunk_size": [
