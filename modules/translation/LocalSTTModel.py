@@ -61,7 +61,6 @@ from core.packet import (
 )
 from modules.translation.base import BasePacketConsumerModule
 from core.module import ParamType
-from funasr.utils.postprocess_utils import rich_transcription_postprocess
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +204,10 @@ class LocalParaformerSTT(BasePacketConsumerModule):
         离线模型（如 paraformer-zh）若内置了 VAD，generate() 可能返回多个分段结果，
         此处将所有分段文字拼接后作为整句返回。
         """
+        # FunASR 会在导入包时同步加载 torch/modelscope。本地模型已在
+        # on_start() 的后台 Pipeline 初始化阶段加载，避免让后处理工具阻塞 GUI 启动。
+        from funasr.utils.postprocess_utils import rich_transcription_postprocess
+
         with self._model_lock:
             try:
                 # sensevoice: <|en|><|EMO_UNKNOWN|><|Speech|><|withitn|>

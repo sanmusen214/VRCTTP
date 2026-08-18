@@ -33,6 +33,9 @@ vrc_realtime_translate/
 └── ai_document/         # 项目文档
 ```
 
+打包版的启动性能分析、FunASR 懒加载边界和相关变更记录见
+[`startup_optimization.md`](startup_optimization.md)。
+
 ## 运行入口
 
 ```bash
