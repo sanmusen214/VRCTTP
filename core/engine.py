@@ -22,6 +22,7 @@ from core.module import BaseModule, PacketConsumerModule, PacketProducerModule
 from core.default_modules import ensure_default_modules
 from core.module_identity import ensure_module_display_names, module_display_name
 from core.pipeline import Pipeline
+from core.runtime_policies import apply_module_runtime_policies
 
 # 延迟导入具体模块类，避免循环依赖
 from modules.audio.loopback import LoopbackSource
@@ -216,6 +217,7 @@ class PipelineEngine:
             # 因为它持有 pipeline 专属的路由上下文，不能跨 pipeline 共享。
             if mod_type in PRODUCER_REGISTRY:
                 params = dict(mod_def.get("params", {}))
+                apply_module_runtime_policies(mod_type, params)
                 params["_ref_id"] = ref_id
                 params["_display_name"] = display_name
                 params["pipeline_id"] = pid
@@ -239,6 +241,7 @@ class PipelineEngine:
 
             if mod_type in MODULE_REGISTRY:
                 params = dict(mod_def.get("params", {}))
+                apply_module_runtime_policies(mod_type, params)
                 params["_ref_id"] = ref_id
                 params["_display_name"] = display_name
                 params["pipeline_id"] = pid
@@ -278,6 +281,7 @@ class PipelineEngine:
         src_cfg = pipeline_cfg["audio_source"]
         src_type = src_cfg["type"]
         src_params = dict(src_cfg.get("params", {}))
+        apply_module_runtime_policies(src_type, src_params)
         global_queue_size = self._raw_config.get("pipeline_queue_size", 2)
         src_params["_ref_id"] = "audio"
         src_params["pipeline_id"] = pid
@@ -308,6 +312,7 @@ class PipelineEngine:
             ref_id = f"step_{idx}"
             tr_type = tr_cfg["type"]
             params = dict(tr_cfg.get("params", {}))
+            apply_module_runtime_policies(tr_type, params)
             params["_ref_id"] = ref_id
             params["pipeline_id"] = pid
             params["_queue_size"] = global_queue_size
@@ -326,6 +331,7 @@ class PipelineEngine:
             ref_id = f"consumer_{idx}"
             con_type = con_cfg["type"]
             params = dict(con_cfg.get("params", {}))
+            apply_module_runtime_policies(con_type, params)
             params["_ref_id"] = ref_id
             params["pipeline_id"] = pid
             params["pipeline_name"] = name

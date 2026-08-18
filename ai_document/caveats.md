@@ -80,6 +80,8 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 - `pipeline_id`
 - `pipeline_name`
 - `_queue_size`
+- `_queue_policy`
+- `_queue_options`
 
 它们由 `PipelineEngine` 注入。
 
@@ -115,7 +117,17 @@ LLM 模块中的 `headers_b64` / `payload_b64` 解码后也支持 `${llm_api_key
 
 ### 队列大小
 
-`pipeline_queue_size` 默认较小，优先保证实时性。如果下游处理太慢，队列满时框架会清空旧包再塞入新包，避免延迟堆积。
+`pipeline_queue_size` 默认较小。普通模块优先保证实时性，队列满时会清理
+旧包。流式本地 STT 是例外：该模块由 `core/runtime_policies.py` 自动装配
+`coalesce_streaming_audio` 策略，队列大小只是开始合并的软阈值。
+
+同段音频积压超过 3 秒时会输出告警，之后按 6、12、24 秒倍增节流。
+这个机制能防止背景噪声被 VAD 误判后产生的大量小包被静默丢弃，但如果
+模型长期推理速度低于实时速度，无损缓冲的延迟仍会持续增长。此时应降低
+模型计算量、调整麦克风/VAD，或改用批处理模式，不应再依赖丢弃音频追赶进度。
+
+`SoundDeviceRecorder` 会对 PortAudio 输入溢出按 1、2、4、8... 次节流记录。
+该告警表示音频在进入 Pipeline 之前就可能已经缺损，与模型识别精度无关。
 
 ### partial 包
 

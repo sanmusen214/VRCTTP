@@ -43,6 +43,7 @@ from core.packet import (
     KEY_TEXT_TRANSLATED,
     MessagePacket,
 )
+from core.packet_queue import create_packet_queue
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,13 @@ class BaseModule(ABC):
         self._ref_id: str = config.get("_ref_id", module_id)
         self.display_name: str = config.get("_display_name", self._ref_id)
         _queue_size = config.get("_queue_size", 2)
-        self.input_queue: queue.Queue[MessagePacket | None] = queue.Queue(maxsize=_queue_size)
+        _queue_policy = config.get("_queue_policy", "drop_oldest")
+        _queue_options = config.get("_queue_options", {})
+        self.input_queue: queue.Queue[MessagePacket | None] = create_packet_queue(
+            _queue_policy,
+            maxsize=_queue_size,
+            options=_queue_options,
+        )
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         # 引用计数：支持共享模块实例被多条 pipeline 使用

@@ -19,7 +19,7 @@
 
 | 字段 | 说明 |
 |------|------|
-| `pipeline_queue_size` | 模块输入队列大小，越小越实时，越大越能缓冲 |
+| `pipeline_queue_size` | 普通模块的队列上限；对流式本地 STT 是开始动态合并 PCM 的软阈值 |
 | `modules` | 全局模块实例注册表 |
 | `pipelines` | pipeline 列表 |
 | `gui` | Web GUI 配置 |

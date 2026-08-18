@@ -35,6 +35,8 @@ vrc_realtime_translate/
 
 打包版的启动性能分析、FunASR 懒加载边界和相关变更记录见
 [`startup_optimization.md`](startup_optimization.md)。
+流式麦克风到本地 STT 的无损队列、动态 PCM 缓冲和诊断机制见
+[`streaming_audio_reliability.md`](streaming_audio_reliability.md)。
 
 ## 运行入口
 

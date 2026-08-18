@@ -40,6 +40,7 @@ KEY_IS_PARTIAL = "is_partial"           # bool: True 表示这是流式中间结
 # 流式音频模式专用
 KEY_IS_SPEECH_START = "is_speech_start"  # bool: True 表示这是新语音段的第一帧
 KEY_AUDIO_CHUNK_INDEX = "audio_chunk_idx"  # int: 流式模式下的帧序号（调试用）
+KEY_AUDIO_CHUNK_END_INDEX = "audio_chunk_end_idx"  # int: 合并缓冲包的末帧序号
 
 # 元信息
 KEY_TIMESTAMP = "timestamp"             # float: 音频捕获时的 UTC 时间戳

@@ -8,11 +8,14 @@ keeps that local contract stable while using sounddevice/PortAudio.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import sounddevice as sd
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SYSTEM_AUDIO_DEVICE = "__default_system_audio__"
 
@@ -176,6 +179,7 @@ class SoundDeviceRecorder:
         self.blocksize = int(blocksize)
         self.channels = int(channels or max(1, min(device.input_channels, 2)))
         self._stream: sd.InputStream | None = None
+        self._overflow_count = 0
 
     def __enter__(self) -> "SoundDeviceRecorder":
         extra_settings = None
@@ -203,6 +207,12 @@ class SoundDeviceRecorder:
             raise RuntimeError("录音流尚未启动。")
         data, overflowed = self._stream.read(int(numframes))
         if overflowed:
-            # Keep the pipeline real-time; the next chunk will catch up.
-            pass
+            self._overflow_count += 1
+            # 按 1, 2, 4, 8... 次节流告警，既不隐藏真实丢音也避免刷屏。
+            if self._overflow_count & (self._overflow_count - 1) == 0:
+                logger.warning(
+                    "麦克风输入缓冲溢出，音频可能已缺损（累计 %d 次）: %s",
+                    self._overflow_count,
+                    self.device.name,
+                )
         return np.asarray(data, dtype=np.float32)

@@ -100,6 +100,21 @@ pre_process(packet)
 
 子类必须实现 `process_packet()`，并始终返回 `list[MessagePacket]`。
 
+### 输入队列策略
+
+`core/runtime_policies.py` 使用声明规则为特定模块参数组合注入队列策略，
+`core/packet_queue.py` 负责通用执行。当前策略为：
+
+| 匹配条件 | 队列策略 | 行为 |
+|----------|----------|------|
+| 默认 | `drop_oldest` | 队列满时清理旧的非音频实时消息 |
+| `local_stt` 且 `streaming_mode=true` | `coalesce_streaming_audio` | 同段相邻 PCM 按顺序合并，不丢弃音频 |
+
+流式音频队列的 `maxsize` 是开始合并的软阈值。拥塞时将等待处理的
+同一语音段包合并成动态 PCM 缓冲；遇到 final/start 边界则保留两个包并
+允许队列短暂扩容。合并包使用 `audio_chunk_idx` 和 `audio_chunk_end_idx`
+记录原始序号范围。
+
 ## ParamType
 
 `ParamType` 描述模块配置参数类型，供 GUI 动态表单使用。
@@ -180,6 +195,8 @@ MODULE_REGISTRY = {
 | `pipeline_id` | 所属 pipeline ID |
 | `pipeline_name` | 所属 pipeline 名称 |
 | `_queue_size` | 输入队列大小 |
+| `_queue_policy` | 由运行时规则注入的队列策略 |
+| `_queue_options` | 队列策略参数 |
 
 这些字段不需要用户手动写入 `config.json`。
 

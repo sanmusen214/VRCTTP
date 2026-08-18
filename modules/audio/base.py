@@ -96,7 +96,7 @@ class VADPacketProducerModule(PacketProducerModule):
     Config 参数（子类可扩展）：
         mode (str): "batch"（默认）或 "streaming"
         sample_rate (int): 采集采样率，默认 16000
-        vad_mode (int): webrtcvad 灵敏度 0-3，默认 2
+        vad_mode (int): webrtcvad 激进程度 0-3，3 最严格，默认 2
         max_segment_seconds (float): 单段最大录音秒数，默认 15
             超过此时长后（批处理模式）会触发智能截断
         chunk_ms (int): 流式模式下每个音频包的时长（ms），默认 200

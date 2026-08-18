@@ -52,6 +52,8 @@ import numpy as np
 
 from core.module import PacketConsumerModule
 from core.packet import (
+    KEY_AUDIO_CHUNK_END_INDEX,
+    KEY_AUDIO_CHUNK_INDEX,
     KEY_AUDIO_DATA,
     KEY_IS_FINAL_SEGMENT,
     KEY_IS_PARTIAL,
@@ -72,6 +74,7 @@ class _StreamState:
     audio_buffer: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float32))
     segment_source_packet: Optional[Any] = None
     accumulated_text: str = ""
+    last_chunk_idx: Optional[int] = None
 
 
 class LocalParaformerSTT(BasePacketConsumerModule):
@@ -252,6 +255,23 @@ class LocalParaformerSTT(BasePacketConsumerModule):
             self._reset_stream_state(pipeline_id, packet)
             state = self._get_stream_state(pipeline_id)
 
+        chunk_start = packet.get(KEY_AUDIO_CHUNK_INDEX)
+        chunk_end = packet.get(KEY_AUDIO_CHUNK_END_INDEX, chunk_start)
+        if chunk_start is not None:
+            expected = 0 if state.last_chunk_idx is None else state.last_chunk_idx + 1
+            if int(chunk_start) != expected:
+                logger.warning(
+                    "[%s] 流式音频序号不连续 pipeline=%s: expected=%d actual=%s，"
+                    "已重置模型 cache 避免跨缺口混合识别",
+                    self.module_id,
+                    pipeline_id,
+                    expected,
+                    chunk_start,
+                )
+                self._reset_stream_state(pipeline_id, packet)
+                state = self._get_stream_state(pipeline_id)
+            state.last_chunk_idx = int(chunk_end)
+
         # 记录最新源包（用于 clone）
         if state.segment_source_packet is None:
             state.segment_source_packet = packet
@@ -261,15 +281,20 @@ class LocalParaformerSTT(BasePacketConsumerModule):
             chunk_f32 = self._pcm_to_float32(pcm)
             state.audio_buffer = np.concatenate([state.audio_buffer, chunk_f32])
 
+        # 动态队列可能将多个相邻音频包合并后一次交付。final 包也必须先
+        # 按模型标准窗口消费，只把最后一个窗口（或余数）标记为 is_final。
+        while len(state.audio_buffer) >= self._chunk_stride and (
+            not is_final or len(state.audio_buffer) > self._chunk_stride
+        ):
+            window = state.audio_buffer[: self._chunk_stride]
+            state.audio_buffer = state.audio_buffer[self._chunk_stride:]
+            new_text = self._infer_chunk(state, window, is_final_chunk=False)
+            if new_text and new_text.strip():
+                state.accumulated_text += new_text.strip()
+                self._emit_partial(packet, state.accumulated_text)
+
         # 中间帧：按模型窗口大小推理，拼接增量文字后 emit partial
         if is_partial and not is_final:
-            while len(state.audio_buffer) >= self._chunk_stride:
-                window = state.audio_buffer[: self._chunk_stride]
-                state.audio_buffer = state.audio_buffer[self._chunk_stride:]
-                new_text = self._infer_chunk(state, window, is_final_chunk=False)
-                if new_text and new_text.strip():
-                    state.accumulated_text += new_text.strip()
-                    self._emit_partial(packet, state.accumulated_text)
             return []
 
         # 最终帧：推理剩余 buffer（is_final=True），拼接后发出完整 final 包

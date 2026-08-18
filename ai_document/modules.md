@@ -78,7 +78,7 @@ Tk 渲染采用增量更新：
 |------|--------|------|
 | `device_name` | `None` | 麦克风设备名，空值表示系统默认 |
 | `sample_rate` | `16000` | 目标采样率 |
-| `vad_mode` | `2` | VAD 灵敏度，0-3 |
+| `vad_mode` | `2` | VAD 激进程度，0-3，3 对非语音过滤最严格 |
 | `mode` | `batch` | `batch` 或 `streaming` |
 | `max_segment_seconds` | `15` | 批处理模式最大语音段长度 |
 | `chunk_ms` | `200` | 流式模式每包音频时长 |
@@ -98,7 +98,7 @@ Tk 渲染采用增量更新：
 |------|--------|------|
 | `device_name` | `__default_system_audio__` | 系统音频输出设备名；`__default_system_audio__` 表示 GUI 中的“默认系统音频”，使用 Windows 当前默认扬声器 |
 | `sample_rate` | `16000` | 目标采样率 |
-| `vad_mode` | `2` | VAD 灵敏度 |
+| `vad_mode` | `2` | VAD 激进程度，3 对非语音过滤最严格 |
 | `mode` | `batch` | `batch` 或 `streaming` |
 | `max_segment_seconds` | `15` | 批处理模式最大语音段长度 |
 | `chunk_ms` | `200` | 流式模式每包音频时长 |
@@ -200,6 +200,14 @@ Tk 渲染采用增量更新：
 | `decoder_chunk_look_back` | `1` | Decoder 回看 chunk 数 |
 
 流式模式下，FunASR 每次返回增量文本，模块内部会累积成完整 `text_original`。
+
+流式本地 STT 使用专用动态音频队列。CPU 推理期间如果短音频包积压，
+队列会将同一语音段的 PCM 按时间顺序合并，而不是清空旧包。合并后的
+final 包在推理前仍会被切分为 `chunk_size[1] * 960` 标准窗口，只有
+最后窗口使用 `is_final=true`。
+
+模块会校验 `audio_chunk_idx` 连续性。如果外部原因造成断号，会记录告警并
+重置当前 pipeline 的 FunASR cache，避免在音频缺口两侧继续混合解码。
 
 ## 翻译模块
 
