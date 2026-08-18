@@ -3,7 +3,7 @@ NiceGUI Web 界面入口 — 多页面架构。
 
 模块结构：
     gui/state.py           — 全局状态（engine 引用、输出缓冲区、输出锁）
-    gui/components/nav.py  — 共享导航栏（含深色/浅色实时切换）
+    gui/components/nav.py  — 共享导航栏（固定亮色主题）
     gui/components/module_form.py — 基于 ParamType 的动态模块参数表单
     gui/pages/home.py          — / 首页：管道状态与 enabled 切换
     gui/pages/output_page.py   — /output 文字输入与实时翻译输出

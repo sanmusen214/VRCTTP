@@ -1,4 +1,4 @@
-version_str = "0.4.6"
+version_str = "0.5.0"
 release_info = """
 如果更新失败。请先关闭黑色背景的软件本体后，双击VRCTTP_UPDATE.exe 进行更新
 ---
@@ -10,6 +10,6 @@ release_info = """
 
 ---
 
-尝试修复了半透明窗口翻译内容如果过多会卡住的问题
+修复深色模式显示bug，修复默认本地流式paraformer模型的路径问题，修复gui在配置文件出错时整个崩掉的问题。
 
 """

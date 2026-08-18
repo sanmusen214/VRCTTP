@@ -1,14 +1,9 @@
-"""
-共享导航栏组件，包含深色/浅色主题实时切换。
-
-直接读取及修改 config.json 中的 gui.dark_mode 并持久化。
-"""
+"""共享导航栏组件。"""
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from nicegui import app, ui
-from gui.state import get_engine
+from nicegui import ui
 
 _PAGES = [
     ("首页",     "/"),
@@ -24,28 +19,8 @@ def create_nav(
     title: str = "VRCTTP 实时翻译",
     right_content: Callable[[], None] | None = None,
 ) -> None:
-    """在当前页面顶部渲染导航栏（含深色/浅色切换开关）。"""
-    dark = ui.dark_mode()
-    engine = get_engine()
-    raw = engine.get_raw_config()
-    is_dark = raw.get("gui", {}).get("dark_mode", False)
-
-    # 恢复主题偏好
-    if is_dark:
-        dark.enable()
-
-    def _toggle(e) -> None:
-        if e.value:
-            dark.enable()
-        else:
-            dark.disable()
-        
-        # 将最新的偏好写入 config 并保存
-        current_raw = engine.get_raw_config()
-        if "gui" not in current_raw:
-            current_raw["gui"] = {}
-        current_raw["gui"]["dark_mode"] = e.value
-        engine.save_config(current_raw)
+    """在当前页面顶部渲染导航栏，并强制使用亮色主题。"""
+    ui.dark_mode(False)
 
     with ui.header(elevated=True).classes("items-center justify-between"):
         with ui.row().classes("items-center gap-6"):
@@ -55,10 +30,4 @@ def create_nav(
         with ui.row().classes("items-center gap-2"):
             if right_content is not None:
                 right_content()
-            ui.label("深色").classes("text-sm text-white")
-            ui.switch(
-                "",
-                value=is_dark,
-                on_change=_toggle,
-            ).props("color=white")
 
